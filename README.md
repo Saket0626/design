@@ -57,12 +57,14 @@ For local dev, Site URL can be `http://localhost:5173`.
 cp .env.example .env
 ```
 
-Edit `.env`:
+Edit `.env` (use your project URL **without** `/rest/v1/`):
 
 ```env
-VITE_SUPABASE_URL=https://xxxxx.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbG...
+VITE_SUPABASE_URL=https://ygaeyqdewovqgaqrgjdj.supabase.co
+VITE_SUPABASE_ANON_KEY=your_anon_key_from_supabase_settings_api
 ```
+
+**Google OAuth:** see [docs/GOOGLE-OAUTH-SETUP.md](docs/GOOGLE-OAUTH-SETUP.md)
 
 ## 3. Run locally
 
@@ -71,7 +73,23 @@ npm install
 npm run dev
 ```
 
-Open **http://localhost:5173** → **Join** or **Continue with Google**.
+Open **http://localhost:5173** (not the Supabase URL) → **Join** or **Continue with Google**.
+
+### "Connection Failed" / ERR_CONNECTION_REFUSED
+
+| Cause | Fix |
+|-------|-----|
+| Dev server not running | Run `npm run dev` in the project folder, then open **http://localhost:5173** |
+| Opened Supabase URL in browser | Supabase is the API backend only — use **localhost:5173** or your **Railway** app URL |
+| Railway app down | Check Railway **Deploy Logs**; ensure Variables are set and redeploy |
+
+Production preview locally:
+
+```bash
+npm run build
+npm start
+# open http://localhost:3000
+```
 
 ## 4. Deploy to Railway
 

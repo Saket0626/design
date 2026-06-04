@@ -6,8 +6,20 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const distDir = join(__dirname, "dist");
-const port = Number(process.env.PORT) || 3000;
-const host = "0.0.0.0";
+const indexHtml = join(distDir, "index.html");
+
+const port = Number.parseInt(process.env.PORT ?? "3000", 10);
+const host = process.env.HOST ?? "0.0.0.0";
+
+if (!Number.isFinite(port) || port < 1 || port > 65535) {
+  console.error("Invalid PORT:", process.env.PORT);
+  process.exit(1);
+}
+
+if (!existsSync(indexHtml)) {
+  console.error("Missing dist/index.html — run `npm run build` before `npm start`");
+  process.exit(1);
+}
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -30,9 +42,16 @@ async function sendFile(res, filePath) {
   res.end(body);
 }
 
-createServer(async (req, res) => {
+const server = createServer(async (req, res) => {
   try {
     let pathname = (req.url ?? "/").split("?")[0];
+
+    if (pathname === "/health") {
+      res.writeHead(200, { "Content-Type": "text/plain" });
+      res.end("ok");
+      return;
+    }
+
     if (pathname === "/") pathname = "/index.html";
 
     const filePath = join(distDir, pathname);
@@ -42,13 +61,20 @@ createServer(async (req, res) => {
       return;
     }
 
-    // SPA fallback for client-side routes
-    await sendFile(res, join(distDir, "index.html"));
+    await sendFile(res, indexHtml);
   } catch (err) {
     console.error("Request error:", err);
     res.writeHead(500, { "Content-Type": "text/plain" });
     res.end("Internal Server Error");
   }
-}).listen(port, host, () => {
+});
+
+server.on("error", (err) => {
+  console.error("Server failed to start:", err);
+  process.exit(1);
+});
+
+server.listen(port, host, () => {
   console.log(`RoomCraft listening on http://${host}:${port}`);
+  console.log(`Health check: http://${host}:${port}/health`);
 });

@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Cormorant Garamond", Georgia, serif;
+  --font-sans: "DM Sans", system-ui, sans-serif;
+  --color-cream: #faf7f2;
+  --color-sand: #e8e0d4;
+  --color-clay: #c4a882;
+  --color-sage: #7d8b6f;
+  --color-forest: #3d4a38;
+  --color-terracotta: #b85c38;
+  --color-charcoal: #2a2622;
+  --color-ink: #1a1816;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-cream text-charcoal font-sans antialiased;
+    margin: 0;
+  }
+  #root {
+    min-height: 100dvh;
+  }
+}
+
+.snap-feed {
+  scroll-snap-type: y mandatory;
+  overflow-y: scroll;
+  height: 100dvh;
+}
+.snap-feed > section {
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}

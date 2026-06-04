@@ -93,6 +93,16 @@ npm start
 
 ## 4. Deploy to Railway
 
+### Automatic (after agent changes)
+
+```bash
+npm run deploy -- "what you changed"
+```
+
+This builds, commits, and pushes to `main` — Railway redeploys from GitHub.
+
+### Manual setup
+
 In Railway → your service → **Variables**, add (required at **build** time for Vite):
 
 | Variable | Value |

@@ -1,0 +1,37 @@
+---
+description: Auto-deploy to Railway after making code changes in this project
+alwaysApply: true
+---
+
+# Railway auto-deploy
+
+When you finish making changes to this project (RoomCraft / design repo), **always deploy to Railway** before ending your turn.
+
+## Deploy steps
+
+1. Run the deploy script from the project root:
+   ```bash
+   cd /Users/saketamanana/design && npm run deploy -- "Short description of what changed"
+   ```
+2. If the script fails, fix the issue and retry.
+3. Tell the user deploy was triggered and remind them to check Railway **Deployments** if the site is not updated yet.
+
+## How it works
+
+- `scripts/deploy.sh` runs `npm run build`, commits any changes, and `git push origin main`.
+- Railway is connected to GitHub (`Saket0626/design`); push to `main` triggers a new deploy.
+- Requires network/git permissions when running the script.
+
+## Railway environment variables (must exist)
+
+- `VITE_SUPABASE_URL` = `https://ygaeyqdewovqgaqrgjdj.supabase.co`
+- `VITE_SUPABASE_ANON_KEY` = project anon key
+
+## Do not
+
+- Commit `.env` (secrets stay local; Railway vars are set in dashboard).
+- Skip deploy after substantive code changes unless the user explicitly says not to deploy.
+
+## Optional: Railway CLI
+
+If `RAILWAY_TOKEN` is set in the environment, the deploy script also runs `railway up`.

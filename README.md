@@ -50,9 +50,9 @@ Replace `YOUR_USERNAME` and `roomcraft` with your GitHub user and repo name.
 
 1. Go to [railway.app](https://railway.app) and sign in (GitHub login works well).
 2. **New Project** → **Deploy from GitHub repo** → select your `roomcraft` repo.
-3. Railway auto-detects Node.js. It will run:
-   - **Build:** `npm run build`
-   - **Start:** `npm start` (serves the Vite `dist` folder with SPA routing)
+3. Railway auto-detects Node.js via `nixpacks.toml`. It will run:
+   - **Build:** `npm ci --include=dev && npm run build`
+   - **Start:** `node server.mjs` (binds to `0.0.0.0` and `$PORT`, SPA routing included)
 4. Open **Settings** → **Networking** → **Generate Domain** to get a public URL.
 
 No environment variables are required for this demo (data lives in the browser via localStorage).

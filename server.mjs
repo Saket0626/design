@@ -52,6 +52,21 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (pathname === "/runtime-config.js") {
+      const config = {
+        VITE_SUPABASE_URL:
+          process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "",
+        VITE_SUPABASE_ANON_KEY:
+          process.env.VITE_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY ?? "",
+      };
+      res.writeHead(200, {
+        "Content-Type": "application/javascript; charset=utf-8",
+        "Cache-Control": "no-store",
+      });
+      res.end(`window.__RUNTIME_CONFIG__=${JSON.stringify(config)};`);
+      return;
+    }
+
     if (pathname === "/") pathname = "/index.html";
 
     const filePath = join(distDir, pathname);
@@ -75,6 +90,17 @@ server.on("error", (err) => {
 });
 
 server.listen(port, host, () => {
+  const hasUrl = Boolean(process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL);
+  const hasKey = Boolean(
+    process.env.VITE_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY
+  );
   console.log(`RoomCraft listening on http://${host}:${port}`);
   console.log(`Health check: http://${host}:${port}/health`);
+  if (!hasUrl || !hasKey) {
+    console.warn(
+      "WARNING: Supabase env vars missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Railway Variables."
+    );
+  } else {
+    console.log("Supabase runtime config: OK");
+  }
 });

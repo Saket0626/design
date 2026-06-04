@@ -69,7 +69,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    if (!isSupabaseConfigured) {
+    if (!isSupabaseConfigured()) {
       setProfiles([]);
       setCategories([]);
       setProjects([]);

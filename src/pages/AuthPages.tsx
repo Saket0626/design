@@ -30,9 +30,13 @@ function SupabaseWarning() {
   if (configured) return null;
   return (
     <div className="mb-6 rounded-xl border border-terracotta/30 bg-terracotta/10 px-4 py-3 text-sm text-charcoal">
-      Supabase is not configured. Add <code className="text-xs">VITE_SUPABASE_URL</code> and{" "}
-      <code className="text-xs">VITE_SUPABASE_ANON_KEY</code> to a <code className="text-xs">.env</code>{" "}
-      file (see README).
+      <p className="font-medium">Supabase API key missing</p>
+      <p className="mt-1">
+        In <strong>Railway → Variables</strong>, add{" "}
+        <code className="text-xs">VITE_SUPABASE_URL</code> and{" "}
+        <code className="text-xs">VITE_SUPABASE_ANON_KEY</code>, then redeploy. Locally, use a{" "}
+        <code className="text-xs">.env</code> file (see README).
+      </p>
     </div>
   );
 }

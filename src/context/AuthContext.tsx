@@ -52,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const refreshUser = useCallback(async () => {
-    if (!isSupabaseConfigured) {
+    if (!isSupabaseConfigured()) {
       setUser(null);
       return;
     }
@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!isSupabaseConfigured) {
+    if (!isSupabaseConfigured()) {
       setLoading(false);
       return;
     }
@@ -86,8 +86,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: string;
       password: string;
     }): Promise<AuthResult> => {
-      if (!isSupabaseConfigured) {
-        return { ok: false, error: "Supabase is not configured" };
+      if (!isSupabaseConfigured()) {
+        return {
+          ok: false,
+          error:
+            "Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Railway Variables, then redeploy.",
+        };
       }
 
       const username = data.username.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -147,8 +151,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signIn = useCallback(async (email: string, password: string): Promise<AuthResult> => {
-    if (!isSupabaseConfigured) {
-      return { ok: false, error: "Supabase is not configured" };
+    if (!isSupabaseConfigured()) {
+      return {
+        ok: false,
+        error:
+          "Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Railway Variables, then redeploy.",
+      };
     }
 
     try {
@@ -165,8 +173,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInWithGoogle = useCallback(async (): Promise<AuthResult> => {
-    if (!isSupabaseConfigured) {
-      return { ok: false, error: "Supabase is not configured" };
+    if (!isSupabaseConfigured()) {
+      return {
+        ok: false,
+        error:
+          "Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Railway Variables, then redeploy.",
+      };
     }
 
     try {
@@ -184,7 +196,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured()) {
       await requireSupabase().auth.signOut();
     }
     setUser(null);
@@ -221,7 +233,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       loading,
-      configured: isSupabaseConfigured,
+      configured: isSupabaseConfigured(),
       signUp,
       signIn,
       signInWithGoogle,

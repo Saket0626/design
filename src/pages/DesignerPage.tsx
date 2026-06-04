@@ -23,7 +23,7 @@ export function DesignerPage() {
       return;
     }
 
-    if (!username || !isSupabaseConfigured) {
+    if (!username || !isSupabaseConfigured()) {
       setLoading(false);
       return;
     }

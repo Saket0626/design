@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  ensureProfileForUser,
   fetchProfile,
   isUsernameAvailable,
   updateProfile as updateProfileDb,
@@ -44,7 +45,12 @@ async function loadUserFromSession(): Promise<User | null> {
     data: { session },
   } = await client.auth.getSession();
   if (!session?.user) return null;
-  return fetchProfile(session.user.id);
+
+  let profile = await fetchProfile(session.user.id);
+  if (!profile) {
+    profile = await ensureProfileForUser(session.user);
+  }
+  return profile;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

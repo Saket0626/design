@@ -1,3 +1,4 @@
+import type { User as AuthUser } from "@supabase/supabase-js";
 import { requireSupabase } from "./supabase";
 import {
   mapCategory,
@@ -20,6 +21,65 @@ import type {
   User,
   WorkshopRoom,
 } from "../types";
+
+function baseUsernameFromAuth(authUser: AuthUser): string {
+  const meta = authUser.user_metadata ?? {};
+  let base = String(
+    meta.username ??
+      meta.preferred_username ??
+      authUser.email?.split("@")[0] ??
+      "user"
+  )
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+  if (base.length < 3) base = "user";
+  return base;
+}
+
+export async function ensureProfileForUser(authUser: AuthUser): Promise<User> {
+  const existing = await fetchProfile(authUser.id);
+  if (existing) return existing;
+
+  let username = baseUsernameFromAuth(authUser);
+  let suffix = 0;
+  while (!(await isUsernameAvailable(username))) {
+    suffix += 1;
+    username = `${baseUsernameFromAuth(authUser)}${suffix}`;
+  }
+
+  const meta = authUser.user_metadata ?? {};
+  const displayName = String(
+    meta.display_name ?? meta.full_name ?? meta.name ?? username
+  );
+  const avatarUrl = String(
+    meta.avatar_url ??
+      meta.picture ??
+      `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`
+  );
+
+  const { data, error } = await requireSupabase()
+    .from("profiles")
+    .insert({
+      id: authUser.id,
+      username,
+      display_name: displayName,
+      email: authUser.email ?? "",
+      avatar_url: avatarUrl,
+      bio: "",
+      specialties: [],
+    })
+    .select()
+    .single();
+
+  if (error) {
+    const retry = await fetchProfile(authUser.id);
+    if (retry) return retry;
+    throw error;
+  }
+
+  return mapProfile(data as ProfileRow);
+}
 
 export async function fetchProfile(userId: string): Promise<User | null> {
   const { data, error } = await requireSupabase()

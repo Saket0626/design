@@ -38,7 +38,8 @@ export function getSupabase(): SupabaseClient | null {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: true,
+      // OAuth code exchange runs explicitly in AuthCallbackPage
+      detectSessionInUrl: false,
       flowType: "pkce",
     },
   });

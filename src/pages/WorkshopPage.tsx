@@ -3,7 +3,7 @@ import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
 import { CATALOG, getProduct } from "../lib/products";
-import { uid } from "../lib/storage";
+import { uid } from "../lib/utils";
 import type { PlacedProduct, Product, WorkshopRoom } from "../types";
 
 const ROOM_BACKGROUNDS = [
@@ -96,7 +96,7 @@ export function WorkshopPage() {
 
   const handlePointerUp = () => setDragging(null);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const room: WorkshopRoom = {
       id: roomDbId,
       userId: user.id,
@@ -107,7 +107,7 @@ export function WorkshopPage() {
       createdAt: existing?.createdAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    saveWorkshop(room);
+    await saveWorkshop(room);
     setSaved(true);
     if (!roomId) navigate(`/workshop/${roomDbId}`, { replace: true });
     setTimeout(() => setSaved(false), 2000);

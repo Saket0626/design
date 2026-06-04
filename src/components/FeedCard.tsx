@@ -1,5 +1,4 @@
 import { Link } from "react-router-dom";
-import { storage } from "../lib/storage";
 import type { FeedPost } from "../types";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
@@ -10,12 +9,16 @@ interface FeedCardProps {
 
 export function FeedCard({ post }: FeedCardProps) {
   const { user } = useAuth();
-  const { toggleLike } = useData();
-  const author = storage.getUsers().find((u) => u.id === post.userId);
+  const { toggleLike, getProfile } = useData();
+  const author = getProfile(post.userId);
   const liked = user ? post.likedBy.includes(user.id) : false;
 
   const formatLikes = (n: number) =>
     n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+
+  const handleLike = () => {
+    if (user) toggleLike(post.id, user.id);
+  };
 
   return (
     <section className="relative h-dvh w-full shrink-0 snap-start">
@@ -41,7 +44,7 @@ export function FeedCard({ post }: FeedCardProps) {
         )}
         <button
           type="button"
-          onClick={() => user && toggleLike(post.id, user.id)}
+          onClick={handleLike}
           className="flex flex-col items-center gap-1 text-cream"
         >
           <span className={`text-2xl ${liked ? "text-terracotta" : ""}`}>

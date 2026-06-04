@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
-import { storage } from "../lib/storage";
 
 const ROOM_PRESETS = [
   "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=800&h=600&fit=crop",
@@ -14,16 +13,23 @@ const ROOM_PRESETS = [
 export function NewCategoryPage() {
   const { user } = useAuth();
   const { addCategory } = useData();
+  const navigate = useNavigate();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [coverImage, setCoverImage] = useState(ROOM_PRESETS[0]);
+  const [busy, setBusy] = useState(false);
 
   if (!user) return <Navigate to="/login" replace />;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cat = addCategory({ name, description, coverImage });
-    window.location.href = `/category/${cat.slug}`;
+    setBusy(true);
+    try {
+      const cat = await addCategory({ name, description, coverImage });
+      navigate(`/category/${cat.slug}`);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -79,8 +85,12 @@ export function NewCategoryPage() {
             placeholder="Or paste image URL"
           />
         </div>
-        <button type="submit" className="w-full rounded-xl bg-forest py-3 font-medium text-cream">
-          Create category
+        <button
+          type="submit"
+          disabled={busy}
+          className="w-full rounded-xl bg-forest py-3 font-medium text-cream disabled:opacity-50"
+        >
+          {busy ? "Creating…" : "Create category"}
         </button>
       </form>
     </div>
@@ -90,7 +100,7 @@ export function NewCategoryPage() {
 export function CategoryPage() {
   const { slug } = useParams<{ slug: string }>();
   const { user } = useAuth();
-  const { categories, getCategoryProjects, addProject, addPost } = useData();
+  const { categories, getCategoryProjects, addProject, addPost, getProfile } = useData();
   const [showAdd, setShowAdd] = useState(false);
   const [projForm, setProjForm] = useState({
     title: "",
@@ -111,13 +121,13 @@ export function CategoryPage() {
     );
   }
 
-  const owner = storage.getUsers().find((u) => u.id === category.userId);
+  const owner = getProfile(category.userId);
   const projects = getCategoryProjects(category.id);
   const isOwner = user?.id === category.userId;
 
-  const handleAddProject = (e: React.FormEvent) => {
+  const handleAddProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    const proj = addProject({
+    const proj = await addProject({
       categoryId: category.id,
       title: projForm.title,
       description: projForm.description,
@@ -125,7 +135,7 @@ export function CategoryPage() {
       roomType: projForm.roomType,
       tags: [],
     });
-    addPost({
+    await addPost({
       title: proj.title,
       caption: proj.description,
       mediaUrl: proj.images[0],

@@ -1,19 +1,50 @@
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useData } from "../context/DataContext";
-import { storage } from "../lib/storage";
+import { fetchProfileByUsername } from "../lib/database";
+import { isSupabaseConfigured } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import { useData } from "../context/DataContext";
+import type { User } from "../types";
 
 export function DesignerPage() {
   const { username } = useParams<{ username: string }>();
-  const { getUserCategories, projects } = useData();
+  const { getUserCategories, projects, profiles } = useData();
   const { user: currentUser } = useAuth();
+  const [designer, setDesigner] = useState<User | null>(
+    () => profiles.find((p) => p.username === username) ?? null
+  );
+  const [loading, setLoading] = useState(!designer);
 
-  const designer = storage.getUsers().find((u) => u.username === username);
+  useEffect(() => {
+    const cached = profiles.find((p) => p.username === username);
+    if (cached) {
+      setDesigner(cached);
+      setLoading(false);
+      return;
+    }
+
+    if (!username || !isSupabaseConfigured) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    fetchProfileByUsername(username)
+      .then(setDesigner)
+      .finally(() => setLoading(false));
+  }, [username, profiles]);
+
+  if (loading) {
+    return <div className="px-4 py-16 text-center text-charcoal/60">Loading profile…</div>;
+  }
+
   if (!designer) {
     return (
       <div className="px-4 py-16 text-center">
         <p>Designer not found.</p>
-        <Link to="/explore">Browse designers</Link>
+        <Link to="/explore" className="text-terracotta">
+          Browse designers
+        </Link>
       </div>
     );
   }

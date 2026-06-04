@@ -7,29 +7,52 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { storage, slugify, uid } from "../lib/storage";
+import {
+  deleteCategoryRow,
+  deleteWorkshopRow,
+  fetchAllAppData,
+  insertCategory,
+  insertPost,
+  insertProject,
+  updateCategoryRow,
+  updatePostLikes,
+  upsertWorkshop,
+} from "../lib/database";
+import { isSupabaseConfigured } from "../lib/supabase";
 import type {
   FeedPost,
   PortfolioProject,
   StyleCategory,
+  User,
   WorkshopRoom,
 } from "../types";
 import { useAuth } from "./AuthContext";
 
 interface DataContextValue {
+  profiles: User[];
   categories: StyleCategory[];
   projects: PortfolioProject[];
   posts: FeedPost[];
   workshops: WorkshopRoom[];
-  refresh: () => void;
-  addCategory: (data: { name: string; description: string; coverImage: string }) => StyleCategory;
-  updateCategory: (id: string, patch: Partial<StyleCategory>) => void;
-  deleteCategory: (id: string) => void;
-  addProject: (data: Omit<PortfolioProject, "id" | "createdAt" | "userId">) => PortfolioProject;
-  addPost: (data: Omit<FeedPost, "id" | "createdAt" | "likes" | "likedBy" | "userId">) => void;
-  toggleLike: (postId: string, userId: string) => void;
-  saveWorkshop: (room: WorkshopRoom) => void;
-  deleteWorkshop: (id: string) => void;
+  loading: boolean;
+  refresh: () => Promise<void>;
+  getProfile: (userId: string) => User | undefined;
+  addCategory: (data: {
+    name: string;
+    description: string;
+    coverImage: string;
+  }) => Promise<StyleCategory>;
+  updateCategory: (id: string, patch: Partial<StyleCategory>) => Promise<void>;
+  deleteCategory: (id: string) => Promise<void>;
+  addProject: (
+    data: Omit<PortfolioProject, "id" | "createdAt" | "userId">
+  ) => Promise<PortfolioProject>;
+  addPost: (
+    data: Omit<FeedPost, "id" | "createdAt" | "likes" | "likedBy" | "userId">
+  ) => Promise<void>;
+  toggleLike: (postId: string, userId: string) => Promise<void>;
+  saveWorkshop: (room: WorkshopRoom) => Promise<void>;
+  deleteWorkshop: (id: string) => Promise<void>;
   getUserCategories: (userId: string) => StyleCategory[];
   getCategoryProjects: (categoryId: string) => PortfolioProject[];
 }
@@ -38,132 +61,124 @@ const DataContext = createContext<DataContextValue | null>(null);
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const [profiles, setProfiles] = useState<User[]>([]);
   const [categories, setCategories] = useState<StyleCategory[]>([]);
   const [projects, setProjects] = useState<PortfolioProject[]>([]);
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [workshops, setWorkshops] = useState<WorkshopRoom[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(() => {
-    setCategories(storage.getCategories());
-    setProjects(storage.getProjects());
-    setPosts(storage.getPosts().sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)));
-    setWorkshops(storage.getWorkshops());
-  }, []);
+  const refresh = useCallback(async () => {
+    if (!isSupabaseConfigured) {
+      setProfiles([]);
+      setCategories([]);
+      setProjects([]);
+      setPosts([]);
+      setWorkshops([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const data = await fetchAllAppData(user?.id ?? null);
+      setProfiles(data.profiles);
+      setCategories(data.categories);
+      setProjects(data.projects);
+      setPosts(data.posts);
+      setWorkshops(data.workshops);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     refresh();
-  }, [refresh, user]);
+  }, [refresh]);
+
+  const getProfile = useCallback(
+    (userId: string) => profiles.find((p) => p.id === userId),
+    [profiles]
+  );
 
   const addCategory = useCallback(
-    (data: { name: string; description: string; coverImage: string }) => {
+    async (data: { name: string; description: string; coverImage: string }) => {
       if (!user) throw new Error("Not signed in");
-      const cat: StyleCategory = {
-        id: uid(),
-        userId: user.id,
-        name: data.name,
-        slug: slugify(data.name),
-        description: data.description,
-        coverImage: data.coverImage,
-        createdAt: new Date().toISOString(),
-      };
-      const next = [...storage.getCategories(), cat];
-      storage.saveCategories(next);
-      refresh();
+      const cat = await insertCategory(user.id, data);
+      await refresh();
       return cat;
     },
     [user, refresh]
   );
 
   const updateCategory = useCallback(
-    (id: string, patch: Partial<StyleCategory>) => {
-      const next = storage.getCategories().map((c) =>
-        c.id === id
-          ? { ...c, ...patch, slug: patch.name ? slugify(patch.name) : c.slug }
-          : c
-      );
-      storage.saveCategories(next);
-      refresh();
+    async (id: string, patch: Partial<StyleCategory>) => {
+      await updateCategoryRow(id, {
+        name: patch.name,
+        description: patch.description,
+        coverImage: patch.coverImage,
+      });
+      await refresh();
     },
     [refresh]
   );
 
   const deleteCategory = useCallback(
-    (id: string) => {
-      storage.saveCategories(storage.getCategories().filter((c) => c.id !== id));
-      storage.saveProjects(storage.getProjects().filter((p) => p.categoryId !== id));
-      refresh();
+    async (id: string) => {
+      await deleteCategoryRow(id);
+      await refresh();
     },
     [refresh]
   );
 
   const addProject = useCallback(
-    (data: Omit<PortfolioProject, "id" | "createdAt" | "userId">) => {
+    async (data: Omit<PortfolioProject, "id" | "createdAt" | "userId">) => {
       if (!user) throw new Error("Not signed in");
-      const proj: PortfolioProject = {
-        ...data,
-        id: uid(),
-        userId: user.id,
-        createdAt: new Date().toISOString(),
-      };
-      storage.saveProjects([...storage.getProjects(), proj]);
-      refresh();
+      const proj = await insertProject(user.id, data);
+      await refresh();
       return proj;
     },
     [user, refresh]
   );
 
   const addPost = useCallback(
-    (data: Omit<FeedPost, "id" | "createdAt" | "likes" | "likedBy" | "userId">) => {
+    async (data: Omit<FeedPost, "id" | "createdAt" | "likes" | "likedBy" | "userId">) => {
       if (!user) throw new Error("Not signed in");
-      const post: FeedPost = {
-        ...data,
-        id: uid(),
-        userId: user.id,
-        likes: 0,
-        likedBy: [],
-        createdAt: new Date().toISOString(),
-      };
-      storage.savePosts([...storage.getPosts(), post]);
-      refresh();
+      await insertPost(user.id, data);
+      await refresh();
     },
     [user, refresh]
   );
 
   const toggleLike = useCallback(
-    (postId: string, userId: string) => {
-      const next = storage.getPosts().map((p) => {
-        if (p.id !== postId) return p;
-        const liked = p.likedBy.includes(userId);
-        return {
-          ...p,
-          likedBy: liked ? p.likedBy.filter((id) => id !== userId) : [...p.likedBy, userId],
-          likes: liked ? p.likes - 1 : p.likes + 1,
-        };
-      });
-      storage.savePosts(next);
-      refresh();
+    async (postId: string, userId: string) => {
+      const post = posts.find((p) => p.id === postId);
+      if (!post) return;
+
+      const liked = post.likedBy.includes(userId);
+      const likedBy = liked
+        ? post.likedBy.filter((id) => id !== userId)
+        : [...post.likedBy, userId];
+      const likes = liked ? post.likes - 1 : post.likes + 1;
+
+      await updatePostLikes(postId, likes, likedBy);
+      await refresh();
     },
-    [refresh]
+    [posts, refresh]
   );
 
   const saveWorkshop = useCallback(
-    (room: WorkshopRoom) => {
-      const existing = storage.getWorkshops();
-      const idx = existing.findIndex((w) => w.id === room.id);
-      const next =
-        idx >= 0
-          ? existing.map((w, i) => (i === idx ? room : w))
-          : [...existing, room];
-      storage.saveWorkshops(next);
-      refresh();
+    async (room: WorkshopRoom) => {
+      await upsertWorkshop(room);
+      await refresh();
     },
     [refresh]
   );
 
   const deleteWorkshop = useCallback(
-    (id: string) => {
-      storage.saveWorkshops(storage.getWorkshops().filter((w) => w.id !== id));
-      refresh();
+    async (id: string) => {
+      await deleteWorkshopRow(id);
+      await refresh();
     },
     [refresh]
   );
@@ -180,11 +195,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({
+      profiles,
       categories,
       projects,
       posts,
       workshops,
+      loading,
       refresh,
+      getProfile,
       addCategory,
       updateCategory,
       deleteCategory,
@@ -197,11 +215,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
       getCategoryProjects,
     }),
     [
+      profiles,
       categories,
       projects,
       posts,
       workshops,
+      loading,
       refresh,
+      getProfile,
       addCategory,
       updateCategory,
       deleteCategory,

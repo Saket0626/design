@@ -28,7 +28,6 @@ export interface User {
   username: string;
   displayName: string;
   email: string;
-  password: string;
   avatarUrl: string;
   bio: string;
   specialties: Specialty[];

@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { AuthProvider } from "./context/AuthContext";
 import { DataProvider } from "./context/DataContext";
+import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { LoginPage, SignupPage } from "./pages/AuthPages";
 import { CategoryPage, NewCategoryPage } from "./pages/CategoryPages";
 import { DesignerPage } from "./pages/DesignerPage";
@@ -24,6 +25,7 @@ function AppRoutes() {
         <Route path="profile/categories/new" element={<NewCategoryPage />} />
         <Route path="category/:slug" element={<CategoryPage />} />
         <Route path="designer/:username" element={<DesignerPage />} />
+        <Route path="auth/callback" element={<AuthCallbackPage />} />
         <Route path="login" element={<LoginPage />} />
         <Route path="signup" element={<SignupPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

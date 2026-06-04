@@ -4,80 +4,102 @@ A TikTok-style platform for interior designers to showcase work, build customiza
 
 ## Features
 
-- **Vertical feed** — Swipe through design posts like TikTok
-- **Designer accounts** — Bio, avatar, and selectable specialties (lighting, staging, etc.)
-- **Style categories** — Sub-portfolios (e.g. Modern Rustic) with projects per room type
-- **Public designer pages** — Shareable `/@username` portfolio sites
-- **Virtual workshop** — Upload a room photo, drag real catalog products (LED strips, lamps, furniture), resize/rotate, and see a cost estimate before buying
+- **Vertical feed** — Swipe through design posts
+- **Real accounts** — Email/password or **Sign in with Google** (Supabase Auth)
+- **Cloud data** — Profiles, categories, projects, posts, and workshops saved in Supabase
+- **Style categories** — Sub-portfolios (e.g. Modern Rustic) with room projects
+- **Public designer pages** — `/designer/yourusername`
+- **Virtual workshop** — Place catalog products on room photos before buying
 
-## Run locally
+## 1. Supabase setup (required)
+
+### Create project
+
+1. Go to [supabase.com](https://supabase.com) → **New project**
+2. Copy **Project URL** and **anon public** key from **Settings → API**
+
+### Run database schema
+
+1. Open **SQL Editor** in Supabase
+2. Paste and run the full contents of [`supabase/schema.sql`](supabase/schema.sql)
+
+This creates tables, row-level security, and an auto-profile trigger on signup.
+
+### Enable Google login
+
+1. **Authentication → Providers → Google** → Enable
+2. Create OAuth credentials in [Google Cloud Console](https://console.cloud.google.com/):
+   - OAuth client type: **Web application**
+   - **Authorized redirect URIs** (add both):
+     - `https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback`
+     - (Supabase shows this exact URL on the Google provider page)
+3. Paste Google **Client ID** and **Client secret** into Supabase Google provider → Save
+
+### Auth redirect URLs
+
+**Authentication → URL Configuration**:
+
+| Setting | Value |
+|--------|--------|
+| Site URL | Your production URL (e.g. `https://your-app.up.railway.app`) |
+| Redirect URLs | `http://localhost:5173/auth/callback` |
+| | `https://your-app.up.railway.app/auth/callback` |
+
+For local dev, Site URL can be `http://localhost:5173`.
+
+### Optional: disable email confirmation (faster dev)
+
+**Authentication → Providers → Email** → turn off **Confirm email** if you want instant login after signup during development.
+
+## 2. Environment variables
 
 ```bash
-cd /Users/saketamanana/design   # or your clone path
+cp .env.example .env
+```
+
+Edit `.env`:
+
+```env
+VITE_SUPABASE_URL=https://xxxxx.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbG...
+```
+
+## 3. Run locally
+
+```bash
 npm install
 npm run dev
 ```
 
-Open the URL in the terminal (usually **http://localhost:5173**).
+Open **http://localhost:5173** → **Join** or **Continue with Google**.
 
-Production build preview (optional):
+## 4. Deploy to Railway
 
-```bash
-npm run build
-npm start
-```
+In Railway → your service → **Variables**, add (required at **build** time for Vite):
 
-Then open **http://localhost:3000**.
+| Variable | Value |
+|----------|--------|
+| `VITE_SUPABASE_URL` | Your Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | Your Supabase anon key |
 
-## Deploy to GitHub
+Redeploy after adding variables. Build runs `npm install --include=dev && npm run build`, start runs `node server.mjs`.
 
-1. Create an empty repo on GitHub (e.g. `roomcraft`) — **do not** add a README if you already have one locally.
-
-2. From this folder:
-
-```bash
-git init
-git add .
-git commit -m "Initial commit: RoomCraft interior design platform"
-git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/roomcraft.git
-git push -u origin main
-```
-
-Replace `YOUR_USERNAME` and `roomcraft` with your GitHub user and repo name.
-
-## Deploy to Railway
-
-1. Go to [railway.app](https://railway.app) and sign in (GitHub login works well).
-2. **New Project** → **Deploy from GitHub repo** → select your `roomcraft` repo.
-3. Railway auto-detects Node.js via `nixpacks.toml`. It will run:
-   - **Build:** `npm ci --include=dev && npm run build`
-   - **Start:** `node server.mjs` (binds to `0.0.0.0` and `$PORT`, SPA routing included)
-4. Open **Settings** → **Networking** → **Generate Domain** to get a public URL.
-
-No environment variables are required for this demo (data lives in the browser via localStorage).
-
-If the build fails, set **Settings → Build** custom build command to `npm run build` and **Deploy** start command to `npm start`.
-
-## Demo account
-
-- Email: `maya@example.com`
-- Password: `demo123`
+Add your Railway domain to Supabase **Redirect URLs** (see above).
 
 ## Tech stack
 
 - React 19 + TypeScript + Vite
 - Tailwind CSS v4
+- Supabase (Auth + Postgres)
 - React Router
-- LocalStorage for persistence (no backend required for demo)
 
 ## Project structure
 
 ```
 src/
-  components/   Layout, FeedCard
-  context/      Auth, Data
-  lib/          storage, products catalog, seed data
-  pages/        Feed, Profile, Workshop, Explore, etc.
-  types/        User, Category, Post, Workshop models
+  context/      Auth + Data (Supabase)
+  lib/          supabase client, database helpers, mappers
+  pages/        Feed, Profile, Workshop, Auth, etc.
+supabase/
+  schema.sql    Run once in Supabase SQL editor
 ```

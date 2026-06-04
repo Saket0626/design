@@ -7,9 +7,12 @@ export function ProfileEditPage() {
   const { user, updateProfile } = useAuth();
   const [bio, setBio] = useState(user?.bio ?? "");
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
+  const [username, setUsername] = useState(user?.username ?? "");
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl ?? "");
   const [specialties, setSpecialties] = useState<Specialty[]>(user?.specialties ?? []);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   if (!user) return <Navigate to="/login" replace />;
 
@@ -19,11 +22,24 @@ export function ProfileEditPage() {
     );
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateProfile({ bio, displayName, avatarUrl, specialties });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setBusy(true);
+    setError("");
+    const result = await updateProfile({
+      bio,
+      displayName,
+      username,
+      avatarUrl,
+      specialties,
+    });
+    setBusy(false);
+    if (result.ok) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } else {
+      setError(result.error);
+    }
   };
 
   return (
@@ -32,8 +48,23 @@ export function ProfileEditPage() {
         ← Back to profile
       </Link>
       <h1 className="mt-4 font-display text-3xl font-semibold text-forest">Edit profile</h1>
+      <p className="mt-1 text-sm text-charcoal/60">
+        Google sign-in users: set your public @username here.
+      </p>
 
       <form onSubmit={handleSave} className="mt-8 space-y-6">
+        {error && (
+          <p className="rounded-lg bg-terracotta/10 px-3 py-2 text-sm text-terracotta">{error}</p>
+        )}
+        <label className="block">
+          <span className="text-sm font-medium">Username (public URL)</span>
+          <input
+            value={username}
+            onChange={(e) => setUsername(e.target.value.toLowerCase())}
+            className="mt-1 w-full rounded-xl border border-sand bg-white px-4 py-2.5"
+            placeholder="yourstudio"
+          />
+        </label>
         <label className="block">
           <span className="text-sm font-medium">Display name</span>
           <input
@@ -84,9 +115,10 @@ export function ProfileEditPage() {
 
         <button
           type="submit"
-          className="w-full rounded-xl bg-terracotta py-3 font-medium text-cream"
+          disabled={busy}
+          className="w-full rounded-xl bg-terracotta py-3 font-medium text-cream disabled:opacity-50"
         >
-          {saved ? "Saved!" : "Save profile"}
+          {saved ? "Saved!" : busy ? "Saving…" : "Save profile"}
         </button>
       </form>
     </div>

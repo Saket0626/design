@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
 import { CATALOG, getProduct } from "../lib/products";
 import { uid } from "../lib/utils";
-import type { PlacedProduct, Product, WorkshopRoom } from "../types";
+import type { PlacedProduct, Product, User, WorkshopRoom } from "../types";
 
 const ROOM_BACKGROUNDS = [
   "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=1200&h=800&fit=crop",
@@ -20,55 +20,15 @@ export function WorkshopPage() {
   const { user } = useAuth();
   const { workshops, saveWorkshop, loading } = useData();
   const navigate = useNavigate();
-  const canvasRef = useRef<HTMLDivElement>(null);
+  const [newRoomId] = useState(() => uid());
+  const [newRoomCreatedAt] = useState(() => new Date().toISOString());
 
   const existing = roomId ? workshops.find((w) => w.id === roomId) : undefined;
-
-  const [roomName, setRoomName] = useState(existing?.name ?? "My virtual room");
-  const [backgroundUrl, setBackgroundUrl] = useState(
-    existing?.backgroundUrl ?? ROOM_BACKGROUNDS[0]
-  );
-  const [placed, setPlaced] = useState<PlacedProduct[]>(existing?.placedProducts ?? []);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<ProductCategory | "all">("all");
-  const [notes, setNotes] = useState(existing?.notes ?? "");
-  const [dragging, setDragging] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [newRoomId] = useState(() => uid());
-  const [activeRoomId, setActiveRoomId] = useState<string | null>(existing?.id ?? null);
-
   const roomDbId = roomId ?? newRoomId;
-  const isExistingRoomReady = !roomId || activeRoomId === roomId;
-
-  useEffect(() => {
-    if (!roomId) {
-      if (activeRoomId !== null) {
-        setRoomName("My virtual room");
-        setBackgroundUrl(ROOM_BACKGROUNDS[0]);
-        setPlaced([]);
-        setSelectedId(null);
-        setNotes("");
-        setSaved(false);
-        setActiveRoomId(null);
-      }
-      return;
-    }
-
-    if (!existing || activeRoomId === roomId) return;
-
-    setRoomName(existing.name);
-    setBackgroundUrl(existing.backgroundUrl);
-    setPlaced(existing.placedProducts);
-    setSelectedId(null);
-    setNotes(existing.notes);
-    setSaved(false);
-    setActiveRoomId(roomId);
-  }, [roomId, existing, activeRoomId]);
 
   if (!user) return <Navigate to="/login" replace />;
 
-  if (roomId && loading && !isExistingRoomReady) {
+  if (roomId && loading && !existing) {
     return (
       <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center px-4 text-sm text-charcoal/60">
         Loading workshop...
@@ -76,7 +36,7 @@ export function WorkshopPage() {
     );
   }
 
-  if (roomId && !loading && !existing && !isExistingRoomReady) {
+  if (roomId && !loading && !existing) {
     return (
       <div className="mx-auto max-w-md px-4 py-16 text-center">
         <h1 className="font-display text-3xl font-semibold text-forest">Workshop not found</h1>
@@ -94,6 +54,53 @@ export function WorkshopPage() {
     );
   }
 
+  const initialRoom: WorkshopRoom =
+    existing ?? {
+      id: roomDbId,
+      userId: user.id,
+      name: "My virtual room",
+      backgroundUrl: ROOM_BACKGROUNDS[0],
+      placedProducts: [],
+      notes: "",
+      createdAt: newRoomCreatedAt,
+      updatedAt: newRoomCreatedAt,
+    };
+
+  return (
+    <WorkshopEditor
+      key={roomDbId}
+      roomId={roomId}
+      user={user}
+      initialRoom={initialRoom}
+      saveWorkshop={saveWorkshop}
+    />
+  );
+}
+
+function WorkshopEditor({
+  roomId,
+  user,
+  initialRoom,
+  saveWorkshop,
+}: {
+  roomId?: string;
+  user: User;
+  initialRoom: WorkshopRoom;
+  saveWorkshop: (room: WorkshopRoom) => Promise<void>;
+}) {
+  const navigate = useNavigate();
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [roomName, setRoomName] = useState(initialRoom.name);
+  const [backgroundUrl, setBackgroundUrl] = useState(initialRoom.backgroundUrl);
+  const [placed, setPlaced] = useState<PlacedProduct[]>(initialRoom.placedProducts);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<ProductCategory | "all">("all");
+  const [notes, setNotes] = useState(initialRoom.notes);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [createdAt] = useState(initialRoom.createdAt);
+
   const selected = placed.find((p) => p.id === selectedId);
   const selectedProduct = selected ? getProduct(selected.productId) : undefined;
 
@@ -106,16 +113,22 @@ export function WorkshopPage() {
   }, 0);
 
   const addProduct = (product: Product) => {
-    const newPlaced: PlacedProduct = {
-      id: uid(),
-      productId: product.id,
-      x: 40 + Math.random() * 20,
-      y: 40 + Math.random() * 20,
-      scale: 1,
-      rotation: 0,
-    };
-    setPlaced((prev) => [...prev, newPlaced]);
-    setSelectedId(newPlaced.id);
+    const placedId = uid();
+    setPlaced((prev) => {
+      const offset = (prev.length % 5) * 4;
+      return [
+        ...prev,
+        {
+          id: placedId,
+          productId: product.id,
+          x: 42 + offset,
+          y: 42 + offset,
+          scale: 1,
+          rotation: 0,
+        },
+      ];
+    });
+    setSelectedId(placedId);
   };
 
   const updatePlaced = (id: string, patch: Partial<PlacedProduct>) => {
@@ -149,16 +162,16 @@ export function WorkshopPage() {
   const handlePointerUp = () => setDragging(null);
 
   const handleSave = async () => {
-    if (!isExistingRoomReady || saving) return;
+    if (saving) return;
 
     const room: WorkshopRoom = {
-      id: roomDbId,
+      id: initialRoom.id,
       userId: user.id,
       name: roomName,
       backgroundUrl,
       placedProducts: placed,
       notes,
-      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      createdAt,
       updatedAt: new Date().toISOString(),
     };
 
@@ -166,7 +179,7 @@ export function WorkshopPage() {
     try {
       await saveWorkshop(room);
       setSaved(true);
-      if (!roomId) navigate(`/workshop/${roomDbId}`, { replace: true });
+      if (!roomId) navigate(`/workshop/${initialRoom.id}`, { replace: true });
       setTimeout(() => setSaved(false), 2000);
     } finally {
       setSaving(false);
@@ -258,7 +271,7 @@ export function WorkshopPage() {
           <button
             type="button"
             onClick={handleSave}
-            disabled={!isExistingRoomReady || saving}
+            disabled={saving}
             className="ml-auto rounded-full bg-terracotta px-5 py-1.5 text-sm font-medium text-cream disabled:opacity-50"
           >
             {saving ? "Saving..." : saved ? "Saved!" : "Save room"}

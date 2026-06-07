@@ -1,10 +1,10 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
 import { CATALOG, getProduct } from "../lib/products";
 import { uid } from "../lib/utils";
-import type { PlacedProduct, Product, WorkshopRoom } from "../types";
+import type { PlacedProduct, Product, User, WorkshopRoom } from "../types";
 
 const ROOM_BACKGROUNDS = [
   "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=1200&h=800&fit=crop",
@@ -18,26 +18,88 @@ type ProductCategory = Product["category"];
 export function WorkshopPage() {
   const { roomId } = useParams<{ roomId?: string }>();
   const { user } = useAuth();
-  const { workshops, saveWorkshop } = useData();
+  const { workshops, saveWorkshop, loading } = useData();
   const navigate = useNavigate();
-  const canvasRef = useRef<HTMLDivElement>(null);
+  const [newRoomId] = useState(() => uid());
+  const [newRoomCreatedAt] = useState(() => new Date().toISOString());
 
   const existing = roomId ? workshops.find((w) => w.id === roomId) : undefined;
-
-  const [roomName, setRoomName] = useState(existing?.name ?? "My virtual room");
-  const [backgroundUrl, setBackgroundUrl] = useState(
-    existing?.backgroundUrl ?? ROOM_BACKGROUNDS[0]
-  );
-  const [placed, setPlaced] = useState<PlacedProduct[]>(existing?.placedProducts ?? []);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<ProductCategory | "all">("all");
-  const [notes, setNotes] = useState(existing?.notes ?? "");
-  const [dragging, setDragging] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-
-  const roomDbId = existing?.id ?? uid();
+  const roomDbId = roomId ?? newRoomId;
 
   if (!user) return <Navigate to="/login" replace />;
+
+  if (roomId && loading && !existing) {
+    return (
+      <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center px-4 text-sm text-charcoal/60">
+        Loading workshop...
+      </div>
+    );
+  }
+
+  if (roomId && !loading && !existing) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-16 text-center">
+        <h1 className="font-display text-3xl font-semibold text-forest">Workshop not found</h1>
+        <p className="mt-2 text-sm text-charcoal/60">
+          This room may have been deleted or belongs to another account.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate("/explore")}
+          className="mt-6 rounded-full bg-forest px-5 py-2 text-sm font-medium text-cream"
+        >
+          Back to explore
+        </button>
+      </div>
+    );
+  }
+
+  const initialRoom: WorkshopRoom =
+    existing ?? {
+      id: roomDbId,
+      userId: user.id,
+      name: "My virtual room",
+      backgroundUrl: ROOM_BACKGROUNDS[0],
+      placedProducts: [],
+      notes: "",
+      createdAt: newRoomCreatedAt,
+      updatedAt: newRoomCreatedAt,
+    };
+
+  return (
+    <WorkshopEditor
+      key={roomDbId}
+      roomId={roomId}
+      user={user}
+      initialRoom={initialRoom}
+      saveWorkshop={saveWorkshop}
+    />
+  );
+}
+
+function WorkshopEditor({
+  roomId,
+  user,
+  initialRoom,
+  saveWorkshop,
+}: {
+  roomId?: string;
+  user: User;
+  initialRoom: WorkshopRoom;
+  saveWorkshop: (room: WorkshopRoom) => Promise<void>;
+}) {
+  const navigate = useNavigate();
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [roomName, setRoomName] = useState(initialRoom.name);
+  const [backgroundUrl, setBackgroundUrl] = useState(initialRoom.backgroundUrl);
+  const [placed, setPlaced] = useState<PlacedProduct[]>(initialRoom.placedProducts);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<ProductCategory | "all">("all");
+  const [notes, setNotes] = useState(initialRoom.notes);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [createdAt] = useState(initialRoom.createdAt);
 
   const selected = placed.find((p) => p.id === selectedId);
   const selectedProduct = selected ? getProduct(selected.productId) : undefined;
@@ -51,16 +113,22 @@ export function WorkshopPage() {
   }, 0);
 
   const addProduct = (product: Product) => {
-    const newPlaced: PlacedProduct = {
-      id: uid(),
-      productId: product.id,
-      x: 40 + Math.random() * 20,
-      y: 40 + Math.random() * 20,
-      scale: 1,
-      rotation: 0,
-    };
-    setPlaced((prev) => [...prev, newPlaced]);
-    setSelectedId(newPlaced.id);
+    const placedId = uid();
+    setPlaced((prev) => {
+      const offset = (prev.length % 5) * 4;
+      return [
+        ...prev,
+        {
+          id: placedId,
+          productId: product.id,
+          x: 42 + offset,
+          y: 42 + offset,
+          scale: 1,
+          rotation: 0,
+        },
+      ];
+    });
+    setSelectedId(placedId);
   };
 
   const updatePlaced = (id: string, patch: Partial<PlacedProduct>) => {
@@ -80,37 +148,42 @@ export function WorkshopPage() {
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   };
 
-  const handlePointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      if (!dragging || !canvasRef.current) return;
-      const rect = canvasRef.current.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
-      updatePlaced(dragging, {
-        x: Math.max(0, Math.min(95, x)),
-        y: Math.max(0, Math.min(95, y)),
-      });
-    },
-    [dragging]
-  );
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!dragging || !canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    updatePlaced(dragging, {
+      x: Math.max(0, Math.min(95, x)),
+      y: Math.max(0, Math.min(95, y)),
+    });
+  };
 
   const handlePointerUp = () => setDragging(null);
 
   const handleSave = async () => {
+    if (saving) return;
+
     const room: WorkshopRoom = {
-      id: roomDbId,
+      id: initialRoom.id,
       userId: user.id,
       name: roomName,
       backgroundUrl,
       placedProducts: placed,
       notes,
-      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      createdAt,
       updatedAt: new Date().toISOString(),
     };
-    await saveWorkshop(room);
-    setSaved(true);
-    if (!roomId) navigate(`/workshop/${roomDbId}`, { replace: true });
-    setTimeout(() => setSaved(false), 2000);
+
+    setSaving(true);
+    try {
+      await saveWorkshop(room);
+      setSaved(true);
+      if (!roomId) navigate(`/workshop/${initialRoom.id}`, { replace: true });
+      setTimeout(() => setSaved(false), 2000);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -198,9 +271,10 @@ export function WorkshopPage() {
           <button
             type="button"
             onClick={handleSave}
-            className="ml-auto rounded-full bg-terracotta px-5 py-1.5 text-sm font-medium text-cream"
+            disabled={saving}
+            className="ml-auto rounded-full bg-terracotta px-5 py-1.5 text-sm font-medium text-cream disabled:opacity-50"
           >
-            {saved ? "Saved!" : "Save room"}
+            {saving ? "Saving..." : saved ? "Saved!" : "Save room"}
           </button>
         </div>
 

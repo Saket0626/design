@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
@@ -18,7 +18,7 @@ type ProductCategory = Product["category"];
 export function WorkshopPage() {
   const { roomId } = useParams<{ roomId?: string }>();
   const { user } = useAuth();
-  const { workshops, saveWorkshop } = useData();
+  const { workshops, saveWorkshop, loading } = useData();
   const navigate = useNavigate();
   const canvasRef = useRef<HTMLDivElement>(null);
 
@@ -34,10 +34,65 @@ export function WorkshopPage() {
   const [notes, setNotes] = useState(existing?.notes ?? "");
   const [dragging, setDragging] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [newRoomId] = useState(() => uid());
+  const [activeRoomId, setActiveRoomId] = useState<string | null>(existing?.id ?? null);
 
-  const roomDbId = existing?.id ?? uid();
+  const roomDbId = roomId ?? newRoomId;
+  const isExistingRoomReady = !roomId || activeRoomId === roomId;
+
+  useEffect(() => {
+    if (!roomId) {
+      if (activeRoomId !== null) {
+        setRoomName("My virtual room");
+        setBackgroundUrl(ROOM_BACKGROUNDS[0]);
+        setPlaced([]);
+        setSelectedId(null);
+        setNotes("");
+        setSaved(false);
+        setActiveRoomId(null);
+      }
+      return;
+    }
+
+    if (!existing || activeRoomId === roomId) return;
+
+    setRoomName(existing.name);
+    setBackgroundUrl(existing.backgroundUrl);
+    setPlaced(existing.placedProducts);
+    setSelectedId(null);
+    setNotes(existing.notes);
+    setSaved(false);
+    setActiveRoomId(roomId);
+  }, [roomId, existing, activeRoomId]);
 
   if (!user) return <Navigate to="/login" replace />;
+
+  if (roomId && loading && !isExistingRoomReady) {
+    return (
+      <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center px-4 text-sm text-charcoal/60">
+        Loading workshop...
+      </div>
+    );
+  }
+
+  if (roomId && !loading && !existing && !isExistingRoomReady) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-16 text-center">
+        <h1 className="font-display text-3xl font-semibold text-forest">Workshop not found</h1>
+        <p className="mt-2 text-sm text-charcoal/60">
+          This room may have been deleted or belongs to another account.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate("/explore")}
+          className="mt-6 rounded-full bg-forest px-5 py-2 text-sm font-medium text-cream"
+        >
+          Back to explore
+        </button>
+      </div>
+    );
+  }
 
   const selected = placed.find((p) => p.id === selectedId);
   const selectedProduct = selected ? getProduct(selected.productId) : undefined;
@@ -80,23 +135,22 @@ export function WorkshopPage() {
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   };
 
-  const handlePointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      if (!dragging || !canvasRef.current) return;
-      const rect = canvasRef.current.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
-      updatePlaced(dragging, {
-        x: Math.max(0, Math.min(95, x)),
-        y: Math.max(0, Math.min(95, y)),
-      });
-    },
-    [dragging]
-  );
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!dragging || !canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    updatePlaced(dragging, {
+      x: Math.max(0, Math.min(95, x)),
+      y: Math.max(0, Math.min(95, y)),
+    });
+  };
 
   const handlePointerUp = () => setDragging(null);
 
   const handleSave = async () => {
+    if (!isExistingRoomReady || saving) return;
+
     const room: WorkshopRoom = {
       id: roomDbId,
       userId: user.id,
@@ -107,10 +161,16 @@ export function WorkshopPage() {
       createdAt: existing?.createdAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    await saveWorkshop(room);
-    setSaved(true);
-    if (!roomId) navigate(`/workshop/${roomDbId}`, { replace: true });
-    setTimeout(() => setSaved(false), 2000);
+
+    setSaving(true);
+    try {
+      await saveWorkshop(room);
+      setSaved(true);
+      if (!roomId) navigate(`/workshop/${roomDbId}`, { replace: true });
+      setTimeout(() => setSaved(false), 2000);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -198,9 +258,10 @@ export function WorkshopPage() {
           <button
             type="button"
             onClick={handleSave}
-            className="ml-auto rounded-full bg-terracotta px-5 py-1.5 text-sm font-medium text-cream"
+            disabled={!isExistingRoomReady || saving}
+            className="ml-auto rounded-full bg-terracotta px-5 py-1.5 text-sm font-medium text-cream disabled:opacity-50"
           >
-            {saved ? "Saved!" : "Save room"}
+            {saving ? "Saving..." : saved ? "Saved!" : "Save room"}
           </button>
         </div>
 

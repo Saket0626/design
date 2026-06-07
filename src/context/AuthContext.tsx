@@ -125,6 +125,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error) return { ok: false, error: error.message };
         if (!authData.user) return { ok: false, error: "Sign up failed" };
 
+        if (!authData.session) {
+          setUser(null);
+          return {
+            ok: false,
+            error: "Account created. Check your email to confirm, then sign in.",
+          };
+        }
+
         // Profile is created by DB trigger; brief wait then fetch
         let profile: User | null = null;
         for (let i = 0; i < 5; i++) {
@@ -141,13 +149,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         setUser(profile);
-
-        if (!authData.session) {
-          return {
-            ok: true,
-          };
-        }
-
         return { ok: true };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : "Sign up failed" };

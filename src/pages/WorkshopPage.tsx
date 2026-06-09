@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
 import { CATALOG, getProduct } from "../lib/products";
 import { uid } from "../lib/utils";
+import { getWorkshopLoadState } from "./workshopLoadState";
 import type { PlacedProduct, Product, WorkshopRoom } from "../types";
 
 const ROOM_BACKGROUNDS = [
@@ -23,14 +24,11 @@ export function WorkshopPage() {
   const navigate = useNavigate();
   const [newRoomId] = useState(uid);
 
-  const existing = roomId ? workshops.find((w) => w.id === roomId) : undefined;
-  const roomDbId = roomId ?? newRoomId;
+  const loadState = getWorkshopLoadState({ roomId, newRoomId, workshops, loading });
 
   if (!user) return <Navigate to="/login" replace />;
 
-  const isLoadingExistingRoom = Boolean(roomId && loading && !existing);
-
-  if (isLoadingExistingRoom) {
+  if (loadState.status === "loading") {
     return (
       <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-cream px-6 text-center">
         <div>
@@ -43,7 +41,7 @@ export function WorkshopPage() {
     );
   }
 
-  if (roomId && !loading && !existing) {
+  if (loadState.status === "not-found") {
     return (
       <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-cream px-6 text-center">
         <div>
@@ -65,10 +63,10 @@ export function WorkshopPage() {
 
   return (
     <WorkshopEditor
-      key={roomDbId}
-      roomDbId={roomDbId}
-      isNewRoom={!roomId}
-      initialRoom={existing}
+      key={loadState.roomDbId}
+      roomDbId={loadState.roomDbId}
+      isNewRoom={loadState.isNewRoom}
+      initialRoom={loadState.initialRoom}
       userId={user.id}
       saveWorkshop={saveWorkshop}
     />

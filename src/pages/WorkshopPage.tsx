@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
@@ -14,49 +14,23 @@ const ROOM_BACKGROUNDS = [
 ];
 
 type ProductCategory = Product["category"];
+type SaveWorkshop = (room: WorkshopRoom) => Promise<void>;
 
 export function WorkshopPage() {
   const { roomId } = useParams<{ roomId?: string }>();
   const { user } = useAuth();
   const { workshops, saveWorkshop, loading } = useData();
   const navigate = useNavigate();
-  const canvasRef = useRef<HTMLDivElement>(null);
-  const newRoomIdRef = useRef(uid());
+  const [newRoomId] = useState(uid);
 
   const existing = roomId ? workshops.find((w) => w.id === roomId) : undefined;
-
-  const [roomName, setRoomName] = useState(existing?.name ?? "My virtual room");
-  const [backgroundUrl, setBackgroundUrl] = useState(
-    existing?.backgroundUrl ?? ROOM_BACKGROUNDS[0]
-  );
-  const [placed, setPlaced] = useState<PlacedProduct[]>(existing?.placedProducts ?? []);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<ProductCategory | "all">("all");
-  const [notes, setNotes] = useState(existing?.notes ?? "");
-  const [dragging, setDragging] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-  const [hydratedRoomId, setHydratedRoomId] = useState(existing?.id);
-
-  const roomDbId = roomId ?? newRoomIdRef.current;
-
-  useEffect(() => {
-    if (!existing || hydratedRoomId === existing.id) return;
-
-    setRoomName(existing.name);
-    setBackgroundUrl(existing.backgroundUrl);
-    setPlaced(existing.placedProducts);
-    setNotes(existing.notes);
-    setSelectedId(null);
-    setSaved(false);
-    setHydratedRoomId(existing.id);
-  }, [existing, hydratedRoomId]);
+  const roomDbId = roomId ?? newRoomId;
 
   if (!user) return <Navigate to="/login" replace />;
 
   const isLoadingExistingRoom = Boolean(roomId && loading && !existing);
-  const isHydratingExistingRoom = Boolean(roomId && existing && hydratedRoomId !== existing.id);
 
-  if (isLoadingExistingRoom || isHydratingExistingRoom) {
+  if (isLoadingExistingRoom) {
     return (
       <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-cream px-6 text-center">
         <div>
@@ -89,6 +63,44 @@ export function WorkshopPage() {
     );
   }
 
+  return (
+    <WorkshopEditor
+      key={roomDbId}
+      roomDbId={roomDbId}
+      isNewRoom={!roomId}
+      initialRoom={existing}
+      userId={user.id}
+      saveWorkshop={saveWorkshop}
+    />
+  );
+}
+
+function WorkshopEditor({
+  roomDbId,
+  isNewRoom,
+  initialRoom,
+  userId,
+  saveWorkshop,
+}: {
+  roomDbId: string;
+  isNewRoom: boolean;
+  initialRoom?: WorkshopRoom;
+  userId: string;
+  saveWorkshop: SaveWorkshop;
+}) {
+  const navigate = useNavigate();
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [roomName, setRoomName] = useState(initialRoom?.name ?? "My virtual room");
+  const [backgroundUrl, setBackgroundUrl] = useState(
+    initialRoom?.backgroundUrl ?? ROOM_BACKGROUNDS[0]
+  );
+  const [placed, setPlaced] = useState<PlacedProduct[]>(initialRoom?.placedProducts ?? []);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<ProductCategory | "all">("all");
+  const [notes, setNotes] = useState(initialRoom?.notes ?? "");
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
   const selected = placed.find((p) => p.id === selectedId);
   const selectedProduct = selected ? getProduct(selected.productId) : undefined;
 
@@ -101,11 +113,12 @@ export function WorkshopPage() {
   }, 0);
 
   const addProduct = (product: Product) => {
+    const offset = placed.length % 5;
     const newPlaced: PlacedProduct = {
       id: uid(),
       productId: product.id,
-      x: 40 + Math.random() * 20,
-      y: 40 + Math.random() * 20,
+      x: 42 + offset * 4,
+      y: 42 + offset * 3,
       scale: 1,
       rotation: 0,
     };
@@ -149,17 +162,17 @@ export function WorkshopPage() {
   const handleSave = async () => {
     const room: WorkshopRoom = {
       id: roomDbId,
-      userId: user.id,
+      userId,
       name: roomName,
       backgroundUrl,
       placedProducts: placed,
       notes,
-      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      createdAt: initialRoom?.createdAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     await saveWorkshop(room);
     setSaved(true);
-    if (!roomId) navigate(`/workshop/${roomDbId}`, { replace: true });
+    if (isNewRoom) navigate(`/workshop/${roomDbId}`, { replace: true });
     setTimeout(() => setSaved(false), 2000);
   };
 

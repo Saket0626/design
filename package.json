@@ -9,6 +9,7 @@
     "start": "node server.mjs",
     "deploy": "bash scripts/deploy.sh",
     "lint": "eslint .",
+    "test": "npm run build && node --test server.test.mjs",
     "preview": "vite preview"
   },
   "engines": {

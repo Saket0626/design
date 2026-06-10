@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
-import { join, extname } from "node:path";
+import { extname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -42,9 +42,34 @@ async function sendFile(res, filePath) {
   res.end(body);
 }
 
+function getSafeStaticFilePath(requestUrl) {
+  let pathname;
+  try {
+    pathname = decodeURIComponent(new URL(requestUrl ?? "/", "http://localhost").pathname);
+  } catch {
+    return null;
+  }
+
+  const requestedPath = pathname === "/" ? "/index.html" : pathname;
+  if (requestedPath.includes("\0")) return null;
+
+  const filePath = resolve(distDir, `.${requestedPath}`);
+  const relativePath = relative(distDir, filePath);
+
+  if (
+    relativePath === "" ||
+    relativePath.startsWith("..") ||
+    isAbsolute(relativePath)
+  ) {
+    return null;
+  }
+
+  return filePath;
+}
+
 const server = createServer(async (req, res) => {
   try {
-    let pathname = (req.url ?? "/").split("?")[0];
+    const pathname = decodeURIComponent(new URL(req.url ?? "/", "http://localhost").pathname);
 
     if (pathname === "/health") {
       res.writeHead(200, { "Content-Type": "text/plain" });
@@ -67,11 +92,9 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (pathname === "/") pathname = "/index.html";
+    const filePath = getSafeStaticFilePath(req.url);
 
-    const filePath = join(distDir, pathname);
-
-    if (existsSync(filePath) && statSync(filePath).isFile()) {
+    if (filePath && existsSync(filePath) && statSync(filePath).isFile()) {
       await sendFile(res, filePath);
       return;
     }

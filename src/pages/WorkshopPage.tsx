@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
@@ -17,12 +17,14 @@ type ProductCategory = Product["category"];
 
 export function WorkshopPage() {
   const { roomId } = useParams<{ roomId?: string }>();
-  const { user } = useAuth();
-  const { workshops, saveWorkshop } = useData();
+  const { user, loading: authLoading } = useAuth();
+  const { workshops, saveWorkshop, loading: dataLoading } = useData();
   const navigate = useNavigate();
   const canvasRef = useRef<HTMLDivElement>(null);
+  const hydratedRoomIdRef = useRef<string | null>(null);
 
   const existing = roomId ? workshops.find((w) => w.id === roomId) : undefined;
+  const [newRoomId, setNewRoomId] = useState(() => uid());
 
   const [roomName, setRoomName] = useState(existing?.name ?? "My virtual room");
   const [backgroundUrl, setBackgroundUrl] = useState(
@@ -35,9 +37,70 @@ export function WorkshopPage() {
   const [dragging, setDragging] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const roomDbId = existing?.id ?? uid();
+  useEffect(() => {
+    if (!roomId) {
+      hydratedRoomIdRef.current = null;
+      setNewRoomId(uid());
+      setRoomName("My virtual room");
+      setBackgroundUrl(ROOM_BACKGROUNDS[0]);
+      setPlaced([]);
+      setSelectedId(null);
+      setNotes("");
+      setSaved(false);
+    }
+  }, [roomId]);
+
+  useEffect(() => {
+    if (!roomId || !existing || hydratedRoomIdRef.current === existing.id) return;
+
+    hydratedRoomIdRef.current = existing.id;
+    setRoomName(existing.name);
+    setBackgroundUrl(existing.backgroundUrl);
+    setPlaced(existing.placedProducts);
+    setSelectedId(null);
+    setNotes(existing.notes);
+    setSaved(false);
+  }, [existing, roomId]);
+
+  const roomDbId = existing?.id ?? newRoomId;
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-cream px-4 text-center text-sm text-charcoal/60">
+        Loading your session...
+      </div>
+    );
+  }
 
   if (!user) return <Navigate to="/login" replace />;
+
+  if (roomId && dataLoading) {
+    return (
+      <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-cream px-4 text-center text-sm text-charcoal/60">
+        Loading your room...
+      </div>
+    );
+  }
+
+  if (roomId && !existing) {
+    return (
+      <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-cream px-4 text-center">
+        <div>
+          <h1 className="font-display text-2xl font-semibold text-forest">Room not found</h1>
+          <p className="mt-2 text-sm text-charcoal/60">
+            This workshop room does not exist or is not available to your account.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate("/workshop", { replace: true })}
+            className="mt-4 rounded-full bg-terracotta px-5 py-2 text-sm font-medium text-cream"
+          >
+            Start a new room
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const selected = placed.find((p) => p.id === selectedId);
   const selectedProduct = selected ? getProduct(selected.productId) : undefined;

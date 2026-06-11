@@ -1,11 +1,12 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
-import { join, extname } from "node:path";
+import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
+const serverEntry = fileURLToPath(import.meta.url);
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
-const distDir = join(__dirname, "dist");
+const distDir = resolve(__dirname, "dist");
 const indexHtml = join(distDir, "index.html");
 
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
@@ -13,11 +14,6 @@ const host = process.env.HOST ?? "0.0.0.0";
 
 if (!Number.isFinite(port) || port < 1 || port > 65535) {
   console.error("Invalid PORT:", process.env.PORT);
-  process.exit(1);
-}
-
-if (!existsSync(indexHtml)) {
-  console.error("Missing dist/index.html — run `npm run build` before `npm start`");
   process.exit(1);
 }
 
@@ -42,65 +38,105 @@ async function sendFile(res, filePath) {
   res.end(body);
 }
 
-const server = createServer(async (req, res) => {
+export function resolveStaticPath(pathname, rootDir = distDir) {
+  let decodedPath;
   try {
-    let pathname = (req.url ?? "/").split("?")[0];
-
-    if (pathname === "/health") {
-      res.writeHead(200, { "Content-Type": "text/plain" });
-      res.end("ok");
-      return;
-    }
-
-    if (pathname === "/runtime-config.js") {
-      const config = {
-        VITE_SUPABASE_URL:
-          process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "",
-        VITE_SUPABASE_ANON_KEY:
-          process.env.VITE_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY ?? "",
-      };
-      res.writeHead(200, {
-        "Content-Type": "application/javascript; charset=utf-8",
-        "Cache-Control": "no-store",
-      });
-      res.end(`window.__RUNTIME_CONFIG__=${JSON.stringify(config)};`);
-      return;
-    }
-
-    if (pathname === "/") pathname = "/index.html";
-
-    const filePath = join(distDir, pathname);
-
-    if (existsSync(filePath) && statSync(filePath).isFile()) {
-      await sendFile(res, filePath);
-      return;
-    }
-
-    await sendFile(res, indexHtml);
-  } catch (err) {
-    console.error("Request error:", err);
-    res.writeHead(500, { "Content-Type": "text/plain" });
-    res.end("Internal Server Error");
+    decodedPath = decodeURIComponent(pathname);
+  } catch {
+    return null;
   }
-});
 
-server.on("error", (err) => {
-  console.error("Server failed to start:", err);
-  process.exit(1);
-});
+  const filePath = resolve(rootDir, decodedPath.replace(/^\/+/, ""));
+  const relativePath = relative(rootDir, filePath);
+  if (
+    relativePath === ".." ||
+    relativePath.startsWith(`..${sep}`) ||
+    isAbsolute(relativePath)
+  ) {
+    return null;
+  }
 
-server.listen(port, host, () => {
-  const hasUrl = Boolean(process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL);
-  const hasKey = Boolean(
-    process.env.VITE_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY
-  );
-  console.log(`RoomCraft listening on http://${host}:${port}`);
-  console.log(`Health check: http://${host}:${port}/health`);
-  if (!hasUrl || !hasKey) {
-    console.warn(
-      "WARNING: Supabase env vars missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Railway Variables."
+  return filePath;
+}
+
+export function createRoomCraftServer() {
+  return createServer(async (req, res) => {
+    try {
+      let pathname = (req.url ?? "/").split("?")[0];
+
+      if (pathname === "/health") {
+        res.writeHead(200, { "Content-Type": "text/plain" });
+        res.end("ok");
+        return;
+      }
+
+      if (pathname === "/runtime-config.js") {
+        const config = {
+          VITE_SUPABASE_URL:
+            process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "",
+          VITE_SUPABASE_ANON_KEY:
+            process.env.VITE_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY ?? "",
+        };
+        res.writeHead(200, {
+          "Content-Type": "application/javascript; charset=utf-8",
+          "Cache-Control": "no-store",
+        });
+        res.end(`window.__RUNTIME_CONFIG__=${JSON.stringify(config)};`);
+        return;
+      }
+
+      if (pathname === "/") pathname = "/index.html";
+
+      const filePath = resolveStaticPath(pathname);
+      if (!filePath) {
+        res.writeHead(400, { "Content-Type": "text/plain" });
+        res.end("Bad Request");
+        return;
+      }
+
+      if (existsSync(filePath) && statSync(filePath).isFile()) {
+        await sendFile(res, filePath);
+        return;
+      }
+
+      await sendFile(res, indexHtml);
+    } catch (err) {
+      console.error("Request error:", err);
+      res.writeHead(500, { "Content-Type": "text/plain" });
+      res.end("Internal Server Error");
+    }
+  });
+}
+
+export function startServer() {
+  if (!existsSync(indexHtml)) {
+    console.error("Missing dist/index.html - run `npm run build` before `npm start`");
+    process.exit(1);
+  }
+
+  const server = createRoomCraftServer();
+  server.on("error", (err) => {
+    console.error("Server failed to start:", err);
+    process.exit(1);
+  });
+
+  server.listen(port, host, () => {
+    const hasUrl = Boolean(process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL);
+    const hasKey = Boolean(
+      process.env.VITE_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY
     );
-  } else {
-    console.log("Supabase runtime config: OK");
-  }
-});
+    console.log(`RoomCraft listening on http://${host}:${port}`);
+    console.log(`Health check: http://${host}:${port}/health`);
+    if (!hasUrl || !hasKey) {
+      console.warn(
+        "WARNING: Supabase env vars missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Railway Variables."
+      );
+    } else {
+      console.log("Supabase runtime config: OK");
+    }
+  });
+}
+
+if (process.argv[1] === serverEntry) {
+  startServer();
+}

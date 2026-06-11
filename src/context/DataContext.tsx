@@ -60,7 +60,7 @@ interface DataContextValue {
 const DataContext = createContext<DataContextValue | null>(null);
 
 export function DataProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [profiles, setProfiles] = useState<User[]>([]);
   const [categories, setCategories] = useState<StyleCategory[]>([]);
   const [projects, setProjects] = useState<PortfolioProject[]>([]);
@@ -69,6 +69,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
+    if (authLoading) {
+      setLoading(true);
+      return;
+    }
+
     if (!isSupabaseConfigured()) {
       setProfiles([]);
       setCategories([]);
@@ -90,7 +95,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [authLoading, user?.id]);
 
   useEffect(() => {
     refresh();

@@ -14,16 +14,76 @@ const ROOM_BACKGROUNDS = [
 ];
 
 type ProductCategory = Product["category"];
+type SaveWorkshop = (room: WorkshopRoom) => Promise<void>;
 
 export function WorkshopPage() {
   const { roomId } = useParams<{ roomId?: string }>();
-  const { user } = useAuth();
-  const { workshops, saveWorkshop } = useData();
+  const { user, loading: authLoading } = useAuth();
+  const { workshops, saveWorkshop, loading: dataLoading } = useData();
   const navigate = useNavigate();
-  const canvasRef = useRef<HTMLDivElement>(null);
 
   const existing = roomId ? workshops.find((w) => w.id === roomId) : undefined;
 
+  if (authLoading) {
+    return (
+      <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-cream px-4 text-center text-sm text-charcoal/60">
+        Loading your session...
+      </div>
+    );
+  }
+
+  if (!user) return <Navigate to="/login" replace />;
+
+  if (roomId && dataLoading) {
+    return (
+      <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-cream px-4 text-center text-sm text-charcoal/60">
+        Loading your room...
+      </div>
+    );
+  }
+
+  if (roomId && !existing) {
+    return (
+      <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center bg-cream px-4 text-center">
+        <div>
+          <h1 className="font-display text-2xl font-semibold text-forest">Room not found</h1>
+          <p className="mt-2 text-sm text-charcoal/60">
+            This workshop room does not exist or is not available to your account.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate("/workshop", { replace: true })}
+            className="mt-4 rounded-full bg-terracotta px-5 py-2 text-sm font-medium text-cream"
+          >
+            Start a new room
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <WorkshopEditor
+      key={existing?.id ?? "new"}
+      existing={existing}
+      saveWorkshop={saveWorkshop}
+      userId={user.id}
+    />
+  );
+}
+
+function WorkshopEditor({
+  existing,
+  saveWorkshop,
+  userId,
+}: {
+  existing?: WorkshopRoom;
+  saveWorkshop: SaveWorkshop;
+  userId: string;
+}) {
+  const navigate = useNavigate();
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [roomDbId] = useState(() => existing?.id ?? uid());
   const [roomName, setRoomName] = useState(existing?.name ?? "My virtual room");
   const [backgroundUrl, setBackgroundUrl] = useState(
     existing?.backgroundUrl ?? ROOM_BACKGROUNDS[0]
@@ -34,10 +94,6 @@ export function WorkshopPage() {
   const [notes, setNotes] = useState(existing?.notes ?? "");
   const [dragging, setDragging] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-
-  const roomDbId = existing?.id ?? uid();
-
-  if (!user) return <Navigate to="/login" replace />;
 
   const selected = placed.find((p) => p.id === selectedId);
   const selectedProduct = selected ? getProduct(selected.productId) : undefined;
@@ -51,21 +107,24 @@ export function WorkshopPage() {
   }, 0);
 
   const addProduct = (product: Product) => {
-    const newPlaced: PlacedProduct = {
-      id: uid(),
-      productId: product.id,
-      x: 40 + Math.random() * 20,
-      y: 40 + Math.random() * 20,
-      scale: 1,
-      rotation: 0,
-    };
-    setPlaced((prev) => [...prev, newPlaced]);
-    setSelectedId(newPlaced.id);
+    const placedId = uid();
+    setPlaced((prev) => [
+      ...prev,
+      {
+        id: placedId,
+        productId: product.id,
+        x: 40 + (prev.length % 5) * 4,
+        y: 40 + (prev.length % 4) * 5,
+        scale: 1,
+        rotation: 0,
+      },
+    ]);
+    setSelectedId(placedId);
   };
 
-  const updatePlaced = (id: string, patch: Partial<PlacedProduct>) => {
+  const updatePlaced = useCallback((id: string, patch: Partial<PlacedProduct>) => {
     setPlaced((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
-  };
+  }, []);
 
   const removePlaced = (id: string) => {
     setPlaced((prev) => prev.filter((p) => p.id !== id));
@@ -91,7 +150,7 @@ export function WorkshopPage() {
         y: Math.max(0, Math.min(95, y)),
       });
     },
-    [dragging]
+    [dragging, updatePlaced]
   );
 
   const handlePointerUp = () => setDragging(null);
@@ -99,7 +158,7 @@ export function WorkshopPage() {
   const handleSave = async () => {
     const room: WorkshopRoom = {
       id: roomDbId,
-      userId: user.id,
+      userId,
       name: roomName,
       backgroundUrl,
       placedProducts: placed,
@@ -109,7 +168,7 @@ export function WorkshopPage() {
     };
     await saveWorkshop(room);
     setSaved(true);
-    if (!roomId) navigate(`/workshop/${roomDbId}`, { replace: true });
+    if (!existing) navigate(`/workshop/${roomDbId}`, { replace: true });
     setTimeout(() => setSaved(false), 2000);
   };
 

@@ -1,11 +1,11 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
-import { join, extname } from "node:path";
+import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
-const distDir = join(__dirname, "dist");
+const distDir = resolve(__dirname, "dist");
 const indexHtml = join(distDir, "index.html");
 
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
@@ -67,9 +67,28 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    try {
+      pathname = decodeURIComponent(pathname);
+    } catch {
+      res.writeHead(400, { "Content-Type": "text/plain" });
+      res.end("Bad Request");
+      return;
+    }
+
     if (pathname === "/") pathname = "/index.html";
 
-    const filePath = join(distDir, pathname);
+    const filePath = resolve(distDir, `.${pathname}`);
+    const relativePath = relative(distDir, filePath);
+
+    if (
+      relativePath === ".." ||
+      relativePath.startsWith(`..${sep}`) ||
+      isAbsolute(relativePath)
+    ) {
+      res.writeHead(403, { "Content-Type": "text/plain" });
+      res.end("Forbidden");
+      return;
+    }
 
     if (existsSync(filePath) && statSync(filePath).isFile()) {
       await sendFile(res, filePath);

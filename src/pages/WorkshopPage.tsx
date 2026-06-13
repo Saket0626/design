@@ -62,11 +62,12 @@ export function WorkshopPage() {
   }, 0);
 
   const addProduct = (product: Product) => {
+    const offset = placed.length % 5;
     const newPlaced: PlacedProduct = {
       id: uid(),
       productId: product.id,
-      x: 40 + Math.random() * 20,
-      y: 40 + Math.random() * 20,
+      x: 40 + offset * 4,
+      y: 40 + ((offset * 7) % 20),
       scale: 1,
       rotation: 0,
     };

@@ -1,6 +1,7 @@
+import type { ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
-import { AuthProvider } from "./context/AuthContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import { DataProvider } from "./context/DataContext";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { LoginPage, SignupPage } from "./pages/AuthPages";
@@ -12,17 +13,68 @@ import { ProfileEditPage } from "./pages/ProfileEditPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { WorkshopPage } from "./pages/WorkshopPage";
 
+function RequireAuth({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center text-charcoal/60">
+        Loading account...
+      </div>
+    );
+  }
+
+  if (!user) return <Navigate to="/login" replace />;
+
+  return children;
+}
+
 function AppRoutes() {
   return (
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<FeedPage />} />
         <Route path="explore" element={<ExplorePage />} />
-        <Route path="workshop" element={<WorkshopPage />} />
-        <Route path="workshop/:roomId" element={<WorkshopPage />} />
-        <Route path="profile" element={<ProfilePage />} />
-        <Route path="profile/edit" element={<ProfileEditPage />} />
-        <Route path="profile/categories/new" element={<NewCategoryPage />} />
+        <Route
+          path="workshop"
+          element={
+            <RequireAuth>
+              <WorkshopPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="workshop/:roomId"
+          element={
+            <RequireAuth>
+              <WorkshopPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="profile"
+          element={
+            <RequireAuth>
+              <ProfilePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="profile/edit"
+          element={
+            <RequireAuth>
+              <ProfileEditPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="profile/categories/new"
+          element={
+            <RequireAuth>
+              <NewCategoryPage />
+            </RequireAuth>
+          }
+        />
         <Route path="category/:slug" element={<CategoryPage />} />
         <Route path="designer/:username" element={<DesignerPage />} />
         <Route path="auth/callback" element={<AuthCallbackPage />} />

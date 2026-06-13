@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
@@ -18,12 +18,14 @@ type ProductCategory = Product["category"];
 export function WorkshopPage() {
   const { roomId } = useParams<{ roomId?: string }>();
   const { user } = useAuth();
-  const { workshops, saveWorkshop } = useData();
+  const { workshops, loading: dataLoading, saveWorkshop } = useData();
   const navigate = useNavigate();
   const canvasRef = useRef<HTMLDivElement>(null);
+  const hydratedRoomIdRef = useRef<string | null>(null);
 
   const existing = roomId ? workshops.find((w) => w.id === roomId) : undefined;
 
+  const [draftRoomId] = useState(() => roomId ?? uid());
   const [roomName, setRoomName] = useState(existing?.name ?? "My virtual room");
   const [backgroundUrl, setBackgroundUrl] = useState(
     existing?.backgroundUrl ?? ROOM_BACKGROUNDS[0]
@@ -35,9 +37,18 @@ export function WorkshopPage() {
   const [dragging, setDragging] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const roomDbId = existing?.id ?? uid();
+  const roomDbId = existing?.id ?? roomId ?? draftRoomId;
 
-  if (!user) return <Navigate to="/login" replace />;
+  useEffect(() => {
+    if (!existing || hydratedRoomIdRef.current === existing.id) return;
+
+    setRoomName(existing.name);
+    setBackgroundUrl(existing.backgroundUrl);
+    setPlaced(existing.placedProducts);
+    setNotes(existing.notes);
+    setSelectedId(null);
+    hydratedRoomIdRef.current = existing.id;
+  }, [existing]);
 
   const selected = placed.find((p) => p.id === selectedId);
   const selectedProduct = selected ? getProduct(selected.productId) : undefined;
@@ -51,11 +62,12 @@ export function WorkshopPage() {
   }, 0);
 
   const addProduct = (product: Product) => {
+    const offset = placed.length % 5;
     const newPlaced: PlacedProduct = {
       id: uid(),
       productId: product.id,
-      x: 40 + Math.random() * 20,
-      y: 40 + Math.random() * 20,
+      x: 40 + offset * 4,
+      y: 40 + ((offset * 7) % 20),
       scale: 1,
       rotation: 0,
     };
@@ -95,6 +107,30 @@ export function WorkshopPage() {
   );
 
   const handlePointerUp = () => setDragging(null);
+
+  const isLoadingSavedRoom = Boolean(roomId && dataLoading && !existing);
+  const isMissingSavedRoom = Boolean(roomId && !dataLoading && !existing);
+
+  if (!user) return <Navigate to="/login" replace />;
+
+  if (isLoadingSavedRoom) {
+    return (
+      <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center text-charcoal/60">
+        Loading room...
+      </div>
+    );
+  }
+
+  if (isMissingSavedRoom) {
+    return (
+      <div className="px-4 py-16 text-center">
+        <p className="font-display text-2xl text-forest">Room not found</p>
+        <p className="mt-2 text-charcoal/60">
+          This saved workshop could not be loaded for your account.
+        </p>
+      </div>
+    );
+  }
 
   const handleSave = async () => {
     const room: WorkshopRoom = {
@@ -198,7 +234,8 @@ export function WorkshopPage() {
           <button
             type="button"
             onClick={handleSave}
-            className="ml-auto rounded-full bg-terracotta px-5 py-1.5 text-sm font-medium text-cream"
+            disabled={isLoadingSavedRoom}
+            className="ml-auto rounded-full bg-terracotta px-5 py-1.5 text-sm font-medium text-cream disabled:opacity-50"
           >
             {saved ? "Saved!" : "Save room"}
           </button>

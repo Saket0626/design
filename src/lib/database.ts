@@ -261,11 +261,21 @@ export async function insertPost(
   return mapPost(data as PostRow);
 }
 
-export async function updatePostLikes(
+export async function togglePostLike(
   postId: string,
   likes: number,
   likedBy: string[]
 ): Promise<void> {
+  const client = requireSupabase();
+  const { error: rpcError } = await client.rpc("toggle_post_like", { post_id: postId });
+
+  if (!rpcError) return;
+
+  const missingRpc = rpcError.code === "PGRST202";
+
+  if (!missingRpc) throw rpcError;
+
+  // Backward-compatible path for Supabase projects before the RLS/RPC SQL is applied.
   const { error } = await requireSupabase()
     .from("feed_posts")
     .update({ likes, liked_by: likedBy })

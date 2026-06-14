@@ -156,12 +156,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (!post) return;
 
       const liked = post.likedBy.includes(userId);
-      const likedBy = liked
-        ? post.likedBy.filter((id) => id !== userId)
-        : [...post.likedBy, userId];
-      const likes = liked ? post.likes - 1 : post.likes + 1;
 
-      await updatePostLikes(postId, likes, likedBy);
+      await updatePostLikes(postId, !liked);
       await refresh();
     },
     [posts, refresh]

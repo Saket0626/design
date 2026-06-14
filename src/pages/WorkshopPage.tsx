@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
@@ -18,9 +18,10 @@ type ProductCategory = Product["category"];
 export function WorkshopPage() {
   const { roomId } = useParams<{ roomId?: string }>();
   const { user } = useAuth();
-  const { workshops, saveWorkshop } = useData();
+  const { workshops, saveWorkshop, loading: dataLoading } = useData();
   const navigate = useNavigate();
   const canvasRef = useRef<HTMLDivElement>(null);
+  const hydratedRoomIdRef = useRef<string | null>(null);
 
   const existing = roomId ? workshops.find((w) => w.id === roomId) : undefined;
 
@@ -34,10 +35,61 @@ export function WorkshopPage() {
   const [notes, setNotes] = useState(existing?.notes ?? "");
   const [dragging, setDragging] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [newRoomId, setNewRoomId] = useState(() => uid());
 
-  const roomDbId = existing?.id ?? uid();
+  const roomDbId = existing?.id ?? newRoomId;
+
+  useEffect(() => {
+    if (!roomId) {
+      hydratedRoomIdRef.current = null;
+      setNewRoomId(uid());
+      setRoomName("My virtual room");
+      setBackgroundUrl(ROOM_BACKGROUNDS[0]);
+      setPlaced([]);
+      setSelectedId(null);
+      setNotes("");
+      setSaved(false);
+      return;
+    }
+
+    if (!existing || hydratedRoomIdRef.current === existing.id) return;
+
+    hydratedRoomIdRef.current = existing.id;
+    setRoomName(existing.name);
+    setBackgroundUrl(existing.backgroundUrl);
+    setPlaced(existing.placedProducts);
+    setSelectedId(null);
+    setNotes(existing.notes);
+    setSaved(false);
+  }, [roomId, existing]);
 
   if (!user) return <Navigate to="/login" replace />;
+
+  if (roomId && dataLoading && !existing) {
+    return (
+      <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center px-4 text-charcoal/60">
+        Loading workshop...
+      </div>
+    );
+  }
+
+  if (roomId && !dataLoading && !existing) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-16 text-center">
+        <h1 className="font-display text-3xl font-semibold text-forest">Workshop not found</h1>
+        <p className="mt-3 text-charcoal/70">
+          This room does not exist or is not available for your account.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate("/workshop", { replace: true })}
+          className="mt-6 rounded-full bg-terracotta px-5 py-2 text-sm font-medium text-cream"
+        >
+          Start a new room
+        </button>
+      </div>
+    );
+  }
 
   const selected = placed.find((p) => p.id === selectedId);
   const selectedProduct = selected ? getProduct(selected.productId) : undefined;

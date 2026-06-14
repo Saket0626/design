@@ -263,13 +263,12 @@ export async function insertPost(
 
 export async function updatePostLikes(
   postId: string,
-  likes: number,
-  likedBy: string[]
+  shouldLike: boolean
 ): Promise<void> {
-  const { error } = await requireSupabase()
-    .from("feed_posts")
-    .update({ likes, liked_by: likedBy })
-    .eq("id", postId);
+  const { error } = await requireSupabase().rpc("set_feed_post_like", {
+    post_id: postId,
+    should_like: shouldLike,
+  });
 
   if (error) throw error;
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
@@ -15,53 +15,20 @@ const ROOM_BACKGROUNDS = [
 
 type ProductCategory = Product["category"];
 
+interface WorkshopEditorProps {
+  roomId?: string;
+  initialRoom?: WorkshopRoom;
+  userId: string;
+  saveWorkshop: (room: WorkshopRoom) => Promise<void>;
+}
+
 export function WorkshopPage() {
   const { roomId } = useParams<{ roomId?: string }>();
   const { user } = useAuth();
   const { workshops, saveWorkshop, loading: dataLoading } = useData();
   const navigate = useNavigate();
-  const canvasRef = useRef<HTMLDivElement>(null);
-  const hydratedRoomIdRef = useRef<string | null>(null);
 
   const existing = roomId ? workshops.find((w) => w.id === roomId) : undefined;
-
-  const [roomName, setRoomName] = useState(existing?.name ?? "My virtual room");
-  const [backgroundUrl, setBackgroundUrl] = useState(
-    existing?.backgroundUrl ?? ROOM_BACKGROUNDS[0]
-  );
-  const [placed, setPlaced] = useState<PlacedProduct[]>(existing?.placedProducts ?? []);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<ProductCategory | "all">("all");
-  const [notes, setNotes] = useState(existing?.notes ?? "");
-  const [dragging, setDragging] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-  const [newRoomId, setNewRoomId] = useState(() => uid());
-
-  const roomDbId = existing?.id ?? newRoomId;
-
-  useEffect(() => {
-    if (!roomId) {
-      hydratedRoomIdRef.current = null;
-      setNewRoomId(uid());
-      setRoomName("My virtual room");
-      setBackgroundUrl(ROOM_BACKGROUNDS[0]);
-      setPlaced([]);
-      setSelectedId(null);
-      setNotes("");
-      setSaved(false);
-      return;
-    }
-
-    if (!existing || hydratedRoomIdRef.current === existing.id) return;
-
-    hydratedRoomIdRef.current = existing.id;
-    setRoomName(existing.name);
-    setBackgroundUrl(existing.backgroundUrl);
-    setPlaced(existing.placedProducts);
-    setSelectedId(null);
-    setNotes(existing.notes);
-    setSaved(false);
-  }, [roomId, existing]);
 
   if (!user) return <Navigate to="/login" replace />;
 
@@ -90,6 +57,32 @@ export function WorkshopPage() {
       </div>
     );
   }
+
+  return (
+    <WorkshopEditor
+      key={existing?.id ?? "new"}
+      roomId={roomId}
+      initialRoom={existing}
+      userId={user.id}
+      saveWorkshop={saveWorkshop}
+    />
+  );
+}
+
+function WorkshopEditor({ roomId, initialRoom, userId, saveWorkshop }: WorkshopEditorProps) {
+  const navigate = useNavigate();
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [roomDbId] = useState(() => initialRoom?.id ?? uid());
+  const [roomName, setRoomName] = useState(initialRoom?.name ?? "My virtual room");
+  const [backgroundUrl, setBackgroundUrl] = useState(
+    initialRoom?.backgroundUrl ?? ROOM_BACKGROUNDS[0]
+  );
+  const [placed, setPlaced] = useState<PlacedProduct[]>(initialRoom?.placedProducts ?? []);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<ProductCategory | "all">("all");
+  const [notes, setNotes] = useState(initialRoom?.notes ?? "");
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
   const selected = placed.find((p) => p.id === selectedId);
   const selectedProduct = selected ? getProduct(selected.productId) : undefined;
@@ -151,12 +144,12 @@ export function WorkshopPage() {
   const handleSave = async () => {
     const room: WorkshopRoom = {
       id: roomDbId,
-      userId: user.id,
+      userId,
       name: roomName,
       backgroundUrl,
       placedProducts: placed,
       notes,
-      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      createdAt: initialRoom?.createdAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     await saveWorkshop(room);

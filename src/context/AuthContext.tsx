@@ -140,14 +140,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           };
         }
 
-        setUser(profile);
-
         if (!authData.session) {
           return {
-            ok: true,
+            ok: false,
+            error: "Account created. Check your email to confirm, then sign in.",
           };
         }
 
+        setUser(profile);
         return { ok: true };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : "Sign up failed" };

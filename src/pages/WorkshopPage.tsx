@@ -15,29 +15,82 @@ const ROOM_BACKGROUNDS = [
 
 type ProductCategory = Product["category"];
 
+function placementCoordinate(seed: string, offset: number): number {
+  let hash = offset;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  }
+  return 40 + (hash % 2000) / 100;
+}
+
+interface WorkshopEditorProps {
+  roomId?: string;
+  initialRoom?: WorkshopRoom;
+  userId: string;
+  saveWorkshop: (room: WorkshopRoom) => Promise<void>;
+}
+
 export function WorkshopPage() {
   const { roomId } = useParams<{ roomId?: string }>();
   const { user } = useAuth();
-  const { workshops, saveWorkshop } = useData();
+  const { workshops, saveWorkshop, loading: dataLoading } = useData();
   const navigate = useNavigate();
-  const canvasRef = useRef<HTMLDivElement>(null);
 
   const existing = roomId ? workshops.find((w) => w.id === roomId) : undefined;
 
-  const [roomName, setRoomName] = useState(existing?.name ?? "My virtual room");
-  const [backgroundUrl, setBackgroundUrl] = useState(
-    existing?.backgroundUrl ?? ROOM_BACKGROUNDS[0]
+  if (!user) return <Navigate to="/login" replace />;
+
+  if (roomId && dataLoading && !existing) {
+    return (
+      <div className="flex min-h-[calc(100dvh-3.5rem)] items-center justify-center px-4 text-charcoal/60">
+        Loading workshop...
+      </div>
+    );
+  }
+
+  if (roomId && !dataLoading && !existing) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-16 text-center">
+        <h1 className="font-display text-3xl font-semibold text-forest">Workshop not found</h1>
+        <p className="mt-3 text-charcoal/70">
+          This room does not exist or is not available for your account.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate("/workshop", { replace: true })}
+          className="mt-6 rounded-full bg-terracotta px-5 py-2 text-sm font-medium text-cream"
+        >
+          Start a new room
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <WorkshopEditor
+      key={existing?.id ?? "new"}
+      roomId={roomId}
+      initialRoom={existing}
+      userId={user.id}
+      saveWorkshop={saveWorkshop}
+    />
   );
-  const [placed, setPlaced] = useState<PlacedProduct[]>(existing?.placedProducts ?? []);
+}
+
+function WorkshopEditor({ roomId, initialRoom, userId, saveWorkshop }: WorkshopEditorProps) {
+  const navigate = useNavigate();
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [roomDbId] = useState(() => initialRoom?.id ?? uid());
+  const [roomName, setRoomName] = useState(initialRoom?.name ?? "My virtual room");
+  const [backgroundUrl, setBackgroundUrl] = useState(
+    initialRoom?.backgroundUrl ?? ROOM_BACKGROUNDS[0]
+  );
+  const [placed, setPlaced] = useState<PlacedProduct[]>(initialRoom?.placedProducts ?? []);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<ProductCategory | "all">("all");
-  const [notes, setNotes] = useState(existing?.notes ?? "");
+  const [notes, setNotes] = useState(initialRoom?.notes ?? "");
   const [dragging, setDragging] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-
-  const roomDbId = existing?.id ?? uid();
-
-  if (!user) return <Navigate to="/login" replace />;
 
   const selected = placed.find((p) => p.id === selectedId);
   const selectedProduct = selected ? getProduct(selected.productId) : undefined;
@@ -51,11 +104,12 @@ export function WorkshopPage() {
   }, 0);
 
   const addProduct = (product: Product) => {
+    const id = uid();
     const newPlaced: PlacedProduct = {
-      id: uid(),
+      id,
       productId: product.id,
-      x: 40 + Math.random() * 20,
-      y: 40 + Math.random() * 20,
+      x: placementCoordinate(id, 0),
+      y: placementCoordinate(id, 1),
       scale: 1,
       rotation: 0,
     };
@@ -99,12 +153,12 @@ export function WorkshopPage() {
   const handleSave = async () => {
     const room: WorkshopRoom = {
       id: roomDbId,
-      userId: user.id,
+      userId,
       name: roomName,
       backgroundUrl,
       placedProducts: placed,
       notes,
-      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      createdAt: initialRoom?.createdAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     await saveWorkshop(room);

@@ -15,6 +15,14 @@ const ROOM_BACKGROUNDS = [
 
 type ProductCategory = Product["category"];
 
+function placementCoordinate(seed: string, offset: number): number {
+  let hash = offset;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  }
+  return 40 + (hash % 2000) / 100;
+}
+
 interface WorkshopEditorProps {
   roomId?: string;
   initialRoom?: WorkshopRoom;
@@ -96,11 +104,12 @@ function WorkshopEditor({ roomId, initialRoom, userId, saveWorkshop }: WorkshopE
   }, 0);
 
   const addProduct = (product: Product) => {
+    const id = uid();
     const newPlaced: PlacedProduct = {
-      id: uid(),
+      id,
       productId: product.id,
-      x: 40 + Math.random() * 20,
-      y: 40 + Math.random() * 20,
+      x: placementCoordinate(id, 0),
+      y: placementCoordinate(id, 1),
       scale: 1,
       rotation: 0,
     };

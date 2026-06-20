@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import {
   createContext,
   useCallback,
@@ -55,7 +56,7 @@ async function loadUserFromSession(): Promise<User | null> {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => isSupabaseConfigured());
 
   const refreshUser = useCallback(async () => {
     if (!isSupabaseConfigured()) {
@@ -68,7 +69,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isSupabaseConfigured()) {
-      setLoading(false);
       return;
     }
 

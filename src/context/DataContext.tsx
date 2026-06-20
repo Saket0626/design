@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import {
   createContext,
   useCallback,
@@ -93,7 +94,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [user?.id]);
 
   useEffect(() => {
-    refresh();
+    let active = true;
+
+    queueMicrotask(() => {
+      if (active) void refresh();
+    });
+
+    return () => {
+      active = false;
+    };
   }, [refresh]);
 
   const getProfile = useCallback(

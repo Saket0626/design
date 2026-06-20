@@ -73,8 +73,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const client = requireSupabase();
+    let active = true;
 
-    refreshUser().finally(() => setLoading(false));
+    queueMicrotask(() => {
+      if (!active) return;
+
+      refreshUser().finally(() => {
+        if (active) setLoading(false);
+      });
+    });
 
     const {
       data: { subscription },
@@ -82,7 +89,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await refreshUser();
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, [refreshUser]);
 
   const signUp = useCallback(

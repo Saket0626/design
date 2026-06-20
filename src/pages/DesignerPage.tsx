@@ -20,18 +20,15 @@ export function DesignerPage() {
     if (cached) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setDesigner(cached);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       return;
     }
 
     if (!username || !isSupabaseConfigured()) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       return;
     }
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     fetchProfileByUsername(username)
       .then(setDesigner)

@@ -150,7 +150,13 @@ create policy "projects_delete_own" on public.portfolio_projects for delete usin
 -- Feed posts
 create policy "posts_select_all" on public.feed_posts for select using (true);
 create policy "posts_insert_own" on public.feed_posts for insert with check (auth.uid() = user_id);
-create policy "posts_update_authenticated" on public.feed_posts for update using (auth.role() = 'authenticated');
+revoke update on table public.feed_posts from anon, authenticated;
+grant update (likes, liked_by) on table public.feed_posts to authenticated;
+create policy "posts_update_likes_authenticated"
+  on public.feed_posts
+  for update
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
 
 -- Workshops (private to owner)
 create policy "workshops_select_own" on public.workshops for select using (auth.uid() = user_id);

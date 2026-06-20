@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import {
   createContext,
   useCallback,
@@ -55,7 +56,7 @@ async function loadUserFromSession(): Promise<User | null> {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => isSupabaseConfigured());
 
   const refreshUser = useCallback(async () => {
     if (!isSupabaseConfigured()) {
@@ -68,13 +69,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isSupabaseConfigured()) {
-      setLoading(false);
       return;
     }
 
     const client = requireSupabase();
+    let active = true;
 
-    refreshUser().finally(() => setLoading(false));
+    queueMicrotask(() => {
+      if (!active) return;
+
+      refreshUser().finally(() => {
+        if (active) setLoading(false);
+      });
+    });
 
     const {
       data: { subscription },
@@ -82,7 +89,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await refreshUser();
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, [refreshUser]);
 
   const signUp = useCallback(
@@ -124,6 +134,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (error) return { ok: false, error: error.message };
         if (!authData.user) return { ok: false, error: "Sign up failed" };
+        if (!authData.session) {
+          setUser(null);
+          return {
+            ok: false,
+            error: "Account created. Check your email to confirm, then sign in.",
+          };
+        }
 
         // Profile is created by DB trigger; brief wait then fetch
         let profile: User | null = null;
@@ -141,12 +158,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         setUser(profile);
-
-        if (!authData.session) {
-          return {
-            ok: true,
-          };
-        }
 
         return { ok: true };
       } catch (e) {

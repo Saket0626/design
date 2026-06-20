@@ -37,8 +37,6 @@ export function WorkshopPage() {
 
   const roomDbId = existing?.id ?? uid();
 
-  if (!user) return <Navigate to="/login" replace />;
-
   const selected = placed.find((p) => p.id === selectedId);
   const selectedProduct = selected ? getProduct(selected.productId) : undefined;
 
@@ -54,8 +52,8 @@ export function WorkshopPage() {
     const newPlaced: PlacedProduct = {
       id: uid(),
       productId: product.id,
-      x: 40 + Math.random() * 20,
-      y: 40 + Math.random() * 20,
+      x: 50,
+      y: 50,
       scale: 1,
       rotation: 0,
     };
@@ -95,6 +93,8 @@ export function WorkshopPage() {
   );
 
   const handlePointerUp = () => setDragging(null);
+
+  if (!user) return <Navigate to="/login" replace />;
 
   const handleSave = async () => {
     const room: WorkshopRoom = {

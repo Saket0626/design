@@ -1,6 +1,8 @@
+import type { ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { AuthProvider } from "./context/AuthContext";
+import { useAuth } from "./context/AuthContext";
 import { DataProvider } from "./context/DataContext";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { LoginPage, SignupPage } from "./pages/AuthPages";
@@ -12,17 +14,68 @@ import { ProfileEditPage } from "./pages/ProfileEditPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { WorkshopPage } from "./pages/WorkshopPage";
 
+function ProtectedRoute({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center px-4 text-center text-charcoal/70">
+        Loading your account...
+      </div>
+    );
+  }
+
+  if (!user) return <Navigate to="/login" replace />;
+
+  return children;
+}
+
 function AppRoutes() {
   return (
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<FeedPage />} />
         <Route path="explore" element={<ExplorePage />} />
-        <Route path="workshop" element={<WorkshopPage />} />
-        <Route path="workshop/:roomId" element={<WorkshopPage />} />
-        <Route path="profile" element={<ProfilePage />} />
-        <Route path="profile/edit" element={<ProfileEditPage />} />
-        <Route path="profile/categories/new" element={<NewCategoryPage />} />
+        <Route
+          path="workshop"
+          element={
+            <ProtectedRoute>
+              <WorkshopPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="workshop/:roomId"
+          element={
+            <ProtectedRoute>
+              <WorkshopPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="profile"
+          element={
+            <ProtectedRoute>
+              <ProfilePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="profile/edit"
+          element={
+            <ProtectedRoute>
+              <ProfileEditPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="profile/categories/new"
+          element={
+            <ProtectedRoute>
+              <NewCategoryPage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="category/:slug" element={<CategoryPage />} />
         <Route path="designer/:username" element={<DesignerPage />} />
         <Route path="auth/callback" element={<AuthCallbackPage />} />

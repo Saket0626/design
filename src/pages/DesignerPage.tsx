@@ -18,6 +18,7 @@ export function DesignerPage() {
   useEffect(() => {
     const cached = profiles.find((p) => p.username === username);
     if (cached) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDesigner(cached);
       setLoading(false);
       return;

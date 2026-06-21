@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
 import { join, extname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveStaticPath } from "./server-utils.mjs";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const distDir = join(__dirname, "dist");
@@ -69,7 +70,13 @@ const server = createServer(async (req, res) => {
 
     if (pathname === "/") pathname = "/index.html";
 
-    const filePath = join(distDir, pathname);
+    const filePath = resolveStaticPath(distDir, pathname);
+
+    if (!filePath) {
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("Not Found");
+      return;
+    }
 
     if (existsSync(filePath) && statSync(filePath).isFile()) {
       await sendFile(res, filePath);

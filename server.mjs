@@ -1,11 +1,12 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
-import { join, extname } from "node:path";
+import { extname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const distDir = join(__dirname, "dist");
+const distRoot = resolve(distDir);
 const indexHtml = join(distDir, "index.html");
 
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
@@ -42,6 +43,30 @@ async function sendFile(res, filePath) {
   res.end(body);
 }
 
+function sendText(res, status, body) {
+  res.writeHead(status, { "Content-Type": "text/plain; charset=utf-8" });
+  res.end(body);
+}
+
+function resolveDistPath(pathname) {
+  let decodedPathname;
+  try {
+    decodedPathname = decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+
+  const requestedPath = decodedPathname === "/" ? "/index.html" : decodedPathname;
+  const filePath = resolve(distRoot, `.${requestedPath}`);
+  const rel = relative(distRoot, filePath);
+
+  if (rel.startsWith("..") || isAbsolute(rel)) {
+    return null;
+  }
+
+  return filePath;
+}
+
 const server = createServer(async (req, res) => {
   try {
     let pathname = (req.url ?? "/").split("?")[0];
@@ -67,9 +92,11 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (pathname === "/") pathname = "/index.html";
-
-    const filePath = join(distDir, pathname);
+    const filePath = resolveDistPath(pathname);
+    if (!filePath) {
+      sendText(res, 404, "Not Found");
+      return;
+    }
 
     if (existsSync(filePath) && statSync(filePath).isFile()) {
       await sendFile(res, filePath);

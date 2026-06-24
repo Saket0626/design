@@ -261,15 +261,14 @@ export async function insertPost(
   return mapPost(data as PostRow);
 }
 
-export async function updatePostLikes(
+export async function togglePostLike(
   postId: string,
-  likes: number,
-  likedBy: string[]
+  userId: string
 ): Promise<void> {
-  const { error } = await requireSupabase()
-    .from("feed_posts")
-    .update({ likes, liked_by: likedBy })
-    .eq("id", postId);
+  const { error } = await requireSupabase().rpc("toggle_post_like", {
+    post_id: postId,
+    liker_id: userId,
+  });
 
   if (error) throw error;
 }

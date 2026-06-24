@@ -3,10 +3,16 @@ import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
 
 export function ProfilePage() {
-  const { user } = useAuth();
-  const { getUserCategories, workshops } = useData();
+  const { user, loading: authLoading } = useAuth();
+  const { getUserCategories, workshops, loading: dataLoading } = useData();
 
+  if (authLoading) {
+    return <div className="px-4 py-16 text-center text-charcoal/60">Loading profile...</div>;
+  }
   if (!user) return <Navigate to="/login" replace />;
+  if (dataLoading) {
+    return <div className="px-4 py-16 text-center text-charcoal/60">Loading profile...</div>;
+  }
 
   const categories = getUserCategories(user.id);
   const myWorkshops = workshops.filter((w) => w.userId === user.id);

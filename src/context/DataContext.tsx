@@ -15,7 +15,7 @@ import {
   insertPost,
   insertProject,
   updateCategoryRow,
-  updatePostLikes,
+  togglePostLike,
   upsertWorkshop,
 } from "../lib/database";
 import { isSupabaseConfigured } from "../lib/supabase";
@@ -60,37 +60,46 @@ interface DataContextValue {
 const DataContext = createContext<DataContextValue | null>(null);
 
 export function DataProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const activeUserId = user?.id ?? null;
   const [profiles, setProfiles] = useState<User[]>([]);
   const [categories, setCategories] = useState<StyleCategory[]>([]);
   const [projects, setProjects] = useState<PortfolioProject[]>([]);
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [workshops, setWorkshops] = useState<WorkshopRoom[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadedForUserId, setLoadedForUserId] = useState<string | null>();
 
   const refresh = useCallback(async () => {
+    if (authLoading) {
+      setLoading(true);
+      return;
+    }
+
     if (!isSupabaseConfigured()) {
       setProfiles([]);
       setCategories([]);
       setProjects([]);
       setPosts([]);
       setWorkshops([]);
+      setLoadedForUserId(activeUserId);
       setLoading(false);
       return;
     }
 
     setLoading(true);
     try {
-      const data = await fetchAllAppData(user?.id ?? null);
+      const data = await fetchAllAppData(activeUserId);
       setProfiles(data.profiles);
       setCategories(data.categories);
       setProjects(data.projects);
       setPosts(data.posts);
       setWorkshops(data.workshops);
+      setLoadedForUserId(activeUserId);
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [activeUserId, authLoading]);
 
   useEffect(() => {
     refresh();
@@ -155,13 +164,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const post = posts.find((p) => p.id === postId);
       if (!post) return;
 
-      const liked = post.likedBy.includes(userId);
-      const likedBy = liked
-        ? post.likedBy.filter((id) => id !== userId)
-        : [...post.likedBy, userId];
-      const likes = liked ? post.likes - 1 : post.likes + 1;
-
-      await updatePostLikes(postId, likes, likedBy);
+      await togglePostLike(postId, userId);
       await refresh();
     },
     [posts, refresh]
@@ -193,6 +196,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [projects]
   );
 
+  const isLoading = authLoading || loading || loadedForUserId !== activeUserId;
+
   const value = useMemo(
     () => ({
       profiles,
@@ -200,7 +205,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       projects,
       posts,
       workshops,
-      loading,
+      loading: isLoading,
       refresh,
       getProfile,
       addCategory,
@@ -220,7 +225,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       projects,
       posts,
       workshops,
-      loading,
+      isLoading,
       refresh,
       getProfile,
       addCategory,

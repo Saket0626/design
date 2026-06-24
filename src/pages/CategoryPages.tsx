@@ -11,7 +11,7 @@ const ROOM_PRESETS = [
 ];
 
 export function NewCategoryPage() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const { addCategory } = useData();
   const navigate = useNavigate();
   const [name, setName] = useState("");
@@ -19,6 +19,9 @@ export function NewCategoryPage() {
   const [coverImage, setCoverImage] = useState(ROOM_PRESETS[0]);
   const [busy, setBusy] = useState(false);
 
+  if (loading) {
+    return <div className="px-4 py-16 text-center text-charcoal/60">Loading account...</div>;
+  }
   if (!user) return <Navigate to="/login" replace />;
 
   const handleSubmit = async (e: React.FormEvent) => {

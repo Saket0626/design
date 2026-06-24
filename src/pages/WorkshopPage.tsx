@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
@@ -17,10 +17,12 @@ type ProductCategory = Product["category"];
 
 export function WorkshopPage() {
   const { roomId } = useParams<{ roomId?: string }>();
-  const { user } = useAuth();
-  const { workshops, saveWorkshop } = useData();
+  const { user, loading: authLoading } = useAuth();
+  const { workshops, saveWorkshop, loading: dataLoading } = useData();
   const navigate = useNavigate();
   const canvasRef = useRef<HTMLDivElement>(null);
+  const newRoomIdRef = useRef(uid());
+  const hydratedRoomIdRef = useRef<string | null>(null);
 
   const existing = roomId ? workshops.find((w) => w.id === roomId) : undefined;
 
@@ -35,9 +37,44 @@ export function WorkshopPage() {
   const [dragging, setDragging] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const roomDbId = existing?.id ?? uid();
+  useEffect(() => {
+    if (existing && hydratedRoomIdRef.current !== existing.id) {
+      setRoomName(existing.name);
+      setBackgroundUrl(existing.backgroundUrl);
+      setPlaced(existing.placedProducts);
+      setNotes(existing.notes);
+      setSelectedId(null);
+      hydratedRoomIdRef.current = existing.id;
+      return;
+    }
 
+    if (!roomId && hydratedRoomIdRef.current !== null) {
+      setRoomName("My virtual room");
+      setBackgroundUrl(ROOM_BACKGROUNDS[0]);
+      setPlaced([]);
+      setNotes("");
+      setSelectedId(null);
+      newRoomIdRef.current = uid();
+      hydratedRoomIdRef.current = null;
+    }
+  }, [existing, roomId]);
+
+  const roomDbId = existing?.id ?? newRoomIdRef.current;
+
+  if (authLoading) {
+    return <div className="px-4 py-16 text-center text-charcoal/60">Loading workshop...</div>;
+  }
   if (!user) return <Navigate to="/login" replace />;
+  if (roomId && dataLoading) {
+    return <div className="px-4 py-16 text-center text-charcoal/60">Loading workshop...</div>;
+  }
+  if (roomId && !existing) {
+    return (
+      <div className="px-4 py-16 text-center text-charcoal/60">
+        <p>Workshop not found.</p>
+      </div>
+    );
+  }
 
   const selected = placed.find((p) => p.id === selectedId);
   const selectedProduct = selected ? getProduct(selected.productId) : undefined;

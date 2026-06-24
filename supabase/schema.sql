@@ -150,7 +150,40 @@ create policy "projects_delete_own" on public.portfolio_projects for delete usin
 -- Feed posts
 create policy "posts_select_all" on public.feed_posts for select using (true);
 create policy "posts_insert_own" on public.feed_posts for insert with check (auth.uid() = user_id);
-create policy "posts_update_authenticated" on public.feed_posts for update using (auth.role() = 'authenticated');
+
+drop policy if exists "posts_update_authenticated" on public.feed_posts;
+
+create or replace function public.toggle_post_like(post_id uuid, liker_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null or auth.uid() <> liker_id then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+
+  update public.feed_posts
+  set
+    liked_by = case
+      when liker_id = any(liked_by) then array_remove(liked_by, liker_id)
+      else array_append(liked_by, liker_id)
+    end,
+    likes = case
+      when liker_id = any(liked_by) then greatest(likes - 1, 0)
+      else likes + 1
+    end
+  where id = post_id;
+
+  if not found then
+    raise exception 'post not found' using errcode = 'P0002';
+  end if;
+end;
+$$;
+
+revoke all on function public.toggle_post_like(uuid, uuid) from public;
+grant execute on function public.toggle_post_like(uuid, uuid) to authenticated;
 
 -- Workshops (private to owner)
 create policy "workshops_select_own" on public.workshops for select using (auth.uid() = user_id);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
@@ -88,11 +88,12 @@ export function WorkshopPage() {
   }, 0);
 
   const addProduct = (product: Product) => {
+    const offset = placed.length % 5;
     const newPlaced: PlacedProduct = {
       id: uid(),
       productId: product.id,
-      x: 40 + Math.random() * 20,
-      y: 40 + Math.random() * 20,
+      x: 40 + offset * 5,
+      y: 40 + offset * 5,
       scale: 1,
       rotation: 0,
     };
@@ -117,19 +118,16 @@ export function WorkshopPage() {
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   };
 
-  const handlePointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      if (!dragging || !canvasRef.current) return;
-      const rect = canvasRef.current.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
-      updatePlaced(dragging, {
-        x: Math.max(0, Math.min(95, x)),
-        y: Math.max(0, Math.min(95, y)),
-      });
-    },
-    [dragging]
-  );
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!dragging || !canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    updatePlaced(dragging, {
+      x: Math.max(0, Math.min(95, x)),
+      y: Math.max(0, Math.min(95, y)),
+    });
+  };
 
   const handlePointerUp = () => setDragging(null);
 

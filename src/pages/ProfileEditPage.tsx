@@ -1,35 +1,33 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { ALL_SPECIALTIES, type Specialty } from "../types";
+import { ALL_SPECIALTIES, type Specialty, type User } from "../types";
 
 export function ProfileEditPage() {
   const { user, loading, updateProfile } = useAuth();
+  if (loading) {
+    return <div className="px-4 py-16 text-center text-charcoal/60">Loading profile...</div>;
+  }
+  if (!user) return <Navigate to="/login" replace />;
+
+  return <ProfileEditForm key={user.id} user={user} updateProfile={updateProfile} />;
+}
+
+function ProfileEditForm({
+  user,
+  updateProfile,
+}: {
+  user: User;
+  updateProfile: ReturnType<typeof useAuth>["updateProfile"];
+}) {
   const [bio, setBio] = useState(user?.bio ?? "");
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
   const [username, setUsername] = useState(user?.username ?? "");
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl ?? "");
   const [specialties, setSpecialties] = useState<Specialty[]>(user?.specialties ?? []);
-  const [hydratedUserId, setHydratedUserId] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (!user || hydratedUserId === user.id) return;
-
-    setBio(user.bio);
-    setDisplayName(user.displayName);
-    setUsername(user.username);
-    setAvatarUrl(user.avatarUrl);
-    setSpecialties(user.specialties);
-    setHydratedUserId(user.id);
-  }, [hydratedUserId, user]);
-
-  if (loading) {
-    return <div className="px-4 py-16 text-center text-charcoal/60">Loading profile...</div>;
-  }
-  if (!user) return <Navigate to="/login" replace />;
 
   const toggleSpecialty = (s: Specialty) => {
     setSpecialties((prev) =>

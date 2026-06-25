@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
 import { CATALOG, getProduct } from "../lib/products";
 import { uid } from "../lib/utils";
-import type { PlacedProduct, Product, WorkshopRoom } from "../types";
+import type { PlacedProduct, Product, User, WorkshopRoom } from "../types";
 
 const ROOM_BACKGROUNDS = [
   "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=1200&h=800&fit=crop",
@@ -17,12 +17,53 @@ type ProductCategory = Product["category"];
 
 export function WorkshopPage() {
   const { roomId } = useParams<{ roomId?: string }>();
-  const { user } = useAuth();
-  const { workshops, saveWorkshop } = useData();
+  const { user, loading: authLoading } = useAuth();
+  const { workshops, saveWorkshop, loading: dataLoading } = useData();
   const navigate = useNavigate();
-  const canvasRef = useRef<HTMLDivElement>(null);
+
+  if (authLoading) {
+    return <div className="px-4 py-16 text-center text-charcoal/60">Loading workshop...</div>;
+  }
+
+  if (!user) return <Navigate to="/login" replace />;
+
+  if (roomId && dataLoading) {
+    return <div className="px-4 py-16 text-center text-charcoal/60">Loading saved room...</div>;
+  }
 
   const existing = roomId ? workshops.find((w) => w.id === roomId) : undefined;
+
+  if (roomId && !existing) {
+    return <div className="px-4 py-16 text-center text-charcoal/60">Workshop not found.</div>;
+  }
+
+  return (
+    <WorkshopEditor
+      key={existing?.id ?? "new"}
+      user={user}
+      existing={existing}
+      roomId={roomId}
+      saveWorkshop={saveWorkshop}
+      onCreated={(id) => navigate(`/workshop/${id}`, { replace: true })}
+    />
+  );
+}
+
+function WorkshopEditor({
+  user,
+  existing,
+  roomId,
+  saveWorkshop,
+  onCreated,
+}: {
+  user: User;
+  existing?: WorkshopRoom;
+  roomId?: string;
+  saveWorkshop: (room: WorkshopRoom) => Promise<void>;
+  onCreated: (id: string) => void;
+}) {
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [roomDbId] = useState(() => existing?.id ?? uid());
 
   const [roomName, setRoomName] = useState(existing?.name ?? "My virtual room");
   const [backgroundUrl, setBackgroundUrl] = useState(
@@ -34,10 +75,6 @@ export function WorkshopPage() {
   const [notes, setNotes] = useState(existing?.notes ?? "");
   const [dragging, setDragging] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-
-  const roomDbId = existing?.id ?? uid();
-
-  if (!user) return <Navigate to="/login" replace />;
 
   const selected = placed.find((p) => p.id === selectedId);
   const selectedProduct = selected ? getProduct(selected.productId) : undefined;
@@ -109,7 +146,7 @@ export function WorkshopPage() {
     };
     await saveWorkshop(room);
     setSaved(true);
-    if (!roomId) navigate(`/workshop/${roomDbId}`, { replace: true });
+    if (!roomId) onCreated(roomDbId);
     setTimeout(() => setSaved(false), 2000);
   };
 

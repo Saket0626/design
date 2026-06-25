@@ -74,15 +74,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const client = requireSupabase();
 
-    refreshUser().finally(() => setLoading(false));
+    const runRefresh = () => {
+      void refreshUser()
+        .catch((error) => {
+          console.error("Failed to refresh auth user", error);
+          setUser(null);
+        })
+        .finally(() => setLoading(false));
+    };
 
+    runRefresh();
+
+    let refreshTimeout: ReturnType<typeof setTimeout> | null = null;
     const {
       data: { subscription },
-    } = client.auth.onAuthStateChange(async () => {
-      await refreshUser();
+    } = client.auth.onAuthStateChange(() => {
+      if (refreshTimeout) clearTimeout(refreshTimeout);
+      refreshTimeout = setTimeout(runRefresh, 0);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      if (refreshTimeout) clearTimeout(refreshTimeout);
+      subscription.unsubscribe();
+    };
   }, [refreshUser]);
 
   const signUp = useCallback(
@@ -125,6 +139,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error) return { ok: false, error: error.message };
         if (!authData.user) return { ok: false, error: "Sign up failed" };
 
+        if (!authData.session) {
+          return {
+            ok: false,
+            error: "Account created. Check your email to confirm, then sign in.",
+          };
+        }
+
         // Profile is created by DB trigger; brief wait then fetch
         let profile: User | null = null;
         for (let i = 0; i < 5; i++) {
@@ -141,12 +162,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         setUser(profile);
-
-        if (!authData.session) {
-          return {
-            ok: true,
-          };
-        }
 
         return { ok: true };
       } catch (e) {

@@ -63,7 +63,6 @@ const DataContext = createContext<DataContextValue | null>(null);
 export function DataProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const currentUserId = user?.id ?? null;
-  const latestUserId = useRef<string | null>(currentUserId);
   const refreshRequestId = useRef(0);
   const [profiles, setProfiles] = useState<User[]>([]);
   const [categories, setCategories] = useState<StyleCategory[]>([]);
@@ -72,11 +71,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [workshops, setWorkshops] = useState<WorkshopRoom[]>([]);
   const [loading, setLoading] = useState(true);
 
-  latestUserId.current = currentUserId;
-
   const refresh = useCallback(async () => {
     const requestId = ++refreshRequestId.current;
-    const userId = latestUserId.current;
+    const userId = currentUserId;
 
     if (!isSupabaseConfigured()) {
       if (requestId !== refreshRequestId.current) return;
@@ -92,7 +89,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
       const data = await fetchAllAppData(userId);
-      if (requestId !== refreshRequestId.current || latestUserId.current !== userId) return;
+      if (requestId !== refreshRequestId.current) return;
       setProfiles(data.profiles);
       setCategories(data.categories);
       setProjects(data.projects);

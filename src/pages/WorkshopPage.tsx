@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
@@ -18,13 +18,40 @@ type ProductCategory = Product["category"];
 export function WorkshopPage() {
   const { roomId } = useParams<{ roomId?: string }>();
   const { user } = useAuth();
-  const { workshops, saveWorkshop } = useData();
+  const { workshops } = useData();
+
+  if (!user) return <Navigate to="/login" replace />;
+
+  const existing = roomId
+    ? workshops.find((w) => w.id === roomId && w.userId === user.id)
+    : undefined;
+  const editorKey = `${user.id}:${
+    existing ? `room:${existing.id}` : roomId ? `missing:${roomId}` : "new"
+  }`;
+
+  return (
+    <WorkshopEditor
+      key={editorKey}
+      roomId={roomId}
+      userId={user.id}
+      existing={existing}
+    />
+  );
+}
+
+function WorkshopEditor({
+  roomId,
+  userId,
+  existing,
+}: {
+  roomId?: string;
+  userId: string;
+  existing?: WorkshopRoom;
+}) {
+  const { saveWorkshop } = useData();
   const navigate = useNavigate();
   const canvasRef = useRef<HTMLDivElement>(null);
   const newRoomId = useRef(uid());
-
-  const existing =
-    roomId && user ? workshops.find((w) => w.id === roomId && w.userId === user.id) : undefined;
 
   const [roomName, setRoomName] = useState(existing?.name ?? "My virtual room");
   const [backgroundUrl, setBackgroundUrl] = useState(
@@ -38,18 +65,6 @@ export function WorkshopPage() {
   const [saved, setSaved] = useState(false);
 
   const roomDbId = existing?.id ?? newRoomId.current;
-
-  useEffect(() => {
-    setRoomName(existing?.name ?? "My virtual room");
-    setBackgroundUrl(existing?.backgroundUrl ?? ROOM_BACKGROUNDS[0]);
-    setPlaced(existing?.placedProducts ?? []);
-    setNotes(existing?.notes ?? "");
-    setSelectedId(null);
-    setSaved(false);
-    if (!roomId) newRoomId.current = uid();
-  }, [existing?.id, roomId, user?.id]);
-
-  if (!user) return <Navigate to="/login" replace />;
 
   const selected = placed.find((p) => p.id === selectedId);
   const selectedProduct = selected ? getProduct(selected.productId) : undefined;
@@ -111,7 +126,7 @@ export function WorkshopPage() {
   const handleSave = async () => {
     const room: WorkshopRoom = {
       id: roomDbId,
-      userId: user.id,
+      userId,
       name: roomName,
       backgroundUrl,
       placedProducts: placed,

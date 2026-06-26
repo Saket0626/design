@@ -21,9 +21,10 @@ export async function completeOAuthCallback(): Promise<{
     throw new Error(decodeURIComponent(oauthError.replace(/\+/g, " ")));
   }
 
+  let codeExchangeError: Error | null = null;
   if (code) {
     const { error } = await client.auth.exchangeCodeForSession(code);
-    if (error) throw error;
+    codeExchangeError = error;
   }
 
   // Remove ?code= from URL so refresh does not retry a spent code
@@ -44,6 +45,7 @@ export async function completeOAuthCallback(): Promise<{
   }
 
   if (!session?.user) {
+    if (codeExchangeError) throw codeExchangeError;
     throw new Error("Sign-in timed out. Close this tab and try Google sign-in again.");
   }
 

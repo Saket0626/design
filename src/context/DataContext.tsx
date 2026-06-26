@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -61,6 +62,9 @@ const DataContext = createContext<DataContextValue | null>(null);
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const currentUserId = user?.id ?? null;
+  const latestUserId = useRef<string | null>(currentUserId);
+  const refreshRequestId = useRef(0);
   const [profiles, setProfiles] = useState<User[]>([]);
   const [categories, setCategories] = useState<StyleCategory[]>([]);
   const [projects, setProjects] = useState<PortfolioProject[]>([]);
@@ -68,8 +72,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [workshops, setWorkshops] = useState<WorkshopRoom[]>([]);
   const [loading, setLoading] = useState(true);
 
+  latestUserId.current = currentUserId;
+
   const refresh = useCallback(async () => {
+    const requestId = ++refreshRequestId.current;
+    const userId = latestUserId.current;
+
     if (!isSupabaseConfigured()) {
+      if (requestId !== refreshRequestId.current) return;
       setProfiles([]);
       setCategories([]);
       setProjects([]);
@@ -81,16 +91,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     setLoading(true);
     try {
-      const data = await fetchAllAppData(user?.id ?? null);
+      const data = await fetchAllAppData(userId);
+      if (requestId !== refreshRequestId.current || latestUserId.current !== userId) return;
       setProfiles(data.profiles);
       setCategories(data.categories);
       setProjects(data.projects);
       setPosts(data.posts);
       setWorkshops(data.workshops);
     } finally {
-      setLoading(false);
+      if (requestId === refreshRequestId.current) {
+        setLoading(false);
+      }
     }
-  }, [user?.id]);
+  }, [currentUserId]);
 
   useEffect(() => {
     refresh();

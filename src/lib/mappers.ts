@@ -12,7 +12,7 @@ export type ProfileRow = {
   id: string;
   username: string;
   display_name: string;
-  email: string;
+  email?: string;
   avatar_url: string;
   bio: string;
   specialties: string[];
@@ -71,7 +71,7 @@ export function mapProfile(row: ProfileRow): User {
     id: row.id,
     username: row.username,
     displayName: row.display_name,
-    email: row.email,
+    email: row.email ?? "",
     avatarUrl: row.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${row.username}`,
     bio: row.bio,
     specialties: row.specialties as Specialty[],

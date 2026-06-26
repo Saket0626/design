@@ -22,6 +22,9 @@ import type {
   WorkshopRoom,
 } from "../types";
 
+const PUBLIC_PROFILE_COLUMNS =
+  "id, username, display_name, avatar_url, bio, specialties, created_at";
+
 function baseUsernameFromAuth(authUser: AuthUser): string {
   const meta = authUser.user_metadata ?? {};
   let base = String(
@@ -69,22 +72,22 @@ export async function ensureProfileForUser(authUser: AuthUser): Promise<User> {
       bio: "",
       specialties: [],
     })
-    .select()
+    .select(PUBLIC_PROFILE_COLUMNS)
     .single();
 
   if (error) {
     const retry = await fetchProfile(authUser.id);
-    if (retry) return retry;
+    if (retry) return { ...retry, email: authUser.email ?? retry.email };
     throw error;
   }
 
-  return mapProfile(data as ProfileRow);
+  return { ...mapProfile(data as ProfileRow), email: authUser.email ?? "" };
 }
 
 export async function fetchProfile(userId: string): Promise<User | null> {
   const { data, error } = await requireSupabase()
     .from("profiles")
-    .select("*")
+    .select(PUBLIC_PROFILE_COLUMNS)
     .eq("id", userId)
     .maybeSingle();
 
@@ -95,7 +98,7 @@ export async function fetchProfile(userId: string): Promise<User | null> {
 export async function fetchProfileByUsername(username: string): Promise<User | null> {
   const { data, error } = await requireSupabase()
     .from("profiles")
-    .select("*")
+    .select(PUBLIC_PROFILE_COLUMNS)
     .eq("username", username)
     .maybeSingle();
 
@@ -106,7 +109,7 @@ export async function fetchProfileByUsername(username: string): Promise<User | n
 export async function fetchAllProfiles(): Promise<User[]> {
   const { data, error } = await requireSupabase()
     .from("profiles")
-    .select("*")
+    .select(PUBLIC_PROFILE_COLUMNS)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -145,7 +148,7 @@ export async function updateProfile(
     .from("profiles")
     .update(row)
     .eq("id", userId)
-    .select()
+    .select(PUBLIC_PROFILE_COLUMNS)
     .single();
 
   if (error) throw error;
@@ -266,10 +269,12 @@ export async function updatePostLikes(
   likes: number,
   likedBy: string[]
 ): Promise<void> {
-  const { error } = await requireSupabase()
-    .from("feed_posts")
-    .update({ likes, liked_by: likedBy })
-    .eq("id", postId);
+  void likes;
+  void likedBy;
+
+  const { error } = await requireSupabase().rpc("toggle_post_like", {
+    target_post_id: postId,
+  });
 
   if (error) throw error;
 }

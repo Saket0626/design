@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
@@ -21,8 +21,10 @@ export function WorkshopPage() {
   const { workshops, saveWorkshop } = useData();
   const navigate = useNavigate();
   const canvasRef = useRef<HTMLDivElement>(null);
+  const newRoomId = useRef(uid());
 
-  const existing = roomId ? workshops.find((w) => w.id === roomId) : undefined;
+  const existing =
+    roomId && user ? workshops.find((w) => w.id === roomId && w.userId === user.id) : undefined;
 
   const [roomName, setRoomName] = useState(existing?.name ?? "My virtual room");
   const [backgroundUrl, setBackgroundUrl] = useState(
@@ -35,7 +37,17 @@ export function WorkshopPage() {
   const [dragging, setDragging] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const roomDbId = existing?.id ?? uid();
+  const roomDbId = existing?.id ?? newRoomId.current;
+
+  useEffect(() => {
+    setRoomName(existing?.name ?? "My virtual room");
+    setBackgroundUrl(existing?.backgroundUrl ?? ROOM_BACKGROUNDS[0]);
+    setPlaced(existing?.placedProducts ?? []);
+    setNotes(existing?.notes ?? "");
+    setSelectedId(null);
+    setSaved(false);
+    if (!roomId) newRoomId.current = uid();
+  }, [existing?.id, roomId, user?.id]);
 
   if (!user) return <Navigate to="/login" replace />;
 

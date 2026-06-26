@@ -50,7 +50,7 @@ async function loadUserFromSession(): Promise<User | null> {
   if (!profile) {
     profile = await ensureProfileForUser(session.user);
   }
-  return profile;
+  return { ...profile, email: session.user.email ?? profile.email };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -226,7 +226,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         const updated = await updateProfileDb(user.id, patch);
-        setUser(updated);
+        setUser({ ...updated, email: user.email });
         return { ok: true };
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : "Update failed" };

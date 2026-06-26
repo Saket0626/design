@@ -135,6 +135,10 @@ create policy "profiles_select_all" on public.profiles for select using (true);
 create policy "profiles_insert_own" on public.profiles for insert with check (auth.uid() = id);
 create policy "profiles_update_own" on public.profiles for update using (auth.uid() = id);
 
+revoke select on public.profiles from public, anon, authenticated;
+grant select (id, username, display_name, avatar_url, bio, specialties, created_at)
+  on public.profiles to anon, authenticated;
+
 -- Categories
 create policy "categories_select_all" on public.style_categories for select using (true);
 create policy "categories_insert_own" on public.style_categories for insert with check (auth.uid() = user_id);
@@ -150,7 +154,49 @@ create policy "projects_delete_own" on public.portfolio_projects for delete usin
 -- Feed posts
 create policy "posts_select_all" on public.feed_posts for select using (true);
 create policy "posts_insert_own" on public.feed_posts for insert with check (auth.uid() = user_id);
-create policy "posts_update_authenticated" on public.feed_posts for update using (auth.role() = 'authenticated');
+create policy "posts_update_own" on public.feed_posts
+  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+revoke update on public.feed_posts from public, anon, authenticated;
+grant update on public.feed_posts to authenticated;
+
+create or replace function public.toggle_post_like(target_post_id uuid)
+returns public.feed_posts
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  updated_post public.feed_posts;
+begin
+  if current_user_id is null then
+    raise exception 'Not authenticated' using errcode = '28000';
+  end if;
+
+  update public.feed_posts
+  set
+    liked_by = case
+      when liked_by @> array[current_user_id] then array_remove(liked_by, current_user_id)
+      else array_append(liked_by, current_user_id)
+    end,
+    likes = cardinality(case
+      when liked_by @> array[current_user_id] then array_remove(liked_by, current_user_id)
+      else array_append(liked_by, current_user_id)
+    end)
+  where id = target_post_id
+  returning * into updated_post;
+
+  if not found then
+    raise exception 'Post not found' using errcode = 'P0002';
+  end if;
+
+  return updated_post;
+end;
+$$;
+
+revoke execute on function public.toggle_post_like(uuid) from public, anon;
+grant execute on function public.toggle_post_like(uuid) to authenticated;
 
 -- Workshops (private to owner)
 create policy "workshops_select_own" on public.workshops for select using (auth.uid() = user_id);

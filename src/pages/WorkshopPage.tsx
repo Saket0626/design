@@ -18,11 +18,40 @@ type ProductCategory = Product["category"];
 export function WorkshopPage() {
   const { roomId } = useParams<{ roomId?: string }>();
   const { user } = useAuth();
-  const { workshops, saveWorkshop } = useData();
+  const { workshops } = useData();
+
+  if (!user) return <Navigate to="/login" replace />;
+
+  const existing = roomId
+    ? workshops.find((w) => w.id === roomId && w.userId === user.id)
+    : undefined;
+  const editorKey = `${user.id}:${
+    existing ? `room:${existing.id}` : roomId ? `missing:${roomId}` : "new"
+  }`;
+
+  return (
+    <WorkshopEditor
+      key={editorKey}
+      roomId={roomId}
+      userId={user.id}
+      existing={existing}
+    />
+  );
+}
+
+function WorkshopEditor({
+  roomId,
+  userId,
+  existing,
+}: {
+  roomId?: string;
+  userId: string;
+  existing?: WorkshopRoom;
+}) {
+  const { saveWorkshop } = useData();
   const navigate = useNavigate();
   const canvasRef = useRef<HTMLDivElement>(null);
-
-  const existing = roomId ? workshops.find((w) => w.id === roomId) : undefined;
+  const newRoomId = useRef(uid());
 
   const [roomName, setRoomName] = useState(existing?.name ?? "My virtual room");
   const [backgroundUrl, setBackgroundUrl] = useState(
@@ -35,9 +64,7 @@ export function WorkshopPage() {
   const [dragging, setDragging] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const roomDbId = existing?.id ?? uid();
-
-  if (!user) return <Navigate to="/login" replace />;
+  const roomDbId = existing?.id ?? newRoomId.current;
 
   const selected = placed.find((p) => p.id === selectedId);
   const selectedProduct = selected ? getProduct(selected.productId) : undefined;
@@ -99,7 +126,7 @@ export function WorkshopPage() {
   const handleSave = async () => {
     const room: WorkshopRoom = {
       id: roomDbId,
-      userId: user.id,
+      userId,
       name: roomName,
       backgroundUrl,
       placedProducts: placed,

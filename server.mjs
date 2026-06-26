@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
-import { join, extname } from "node:path";
+import { extname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -42,6 +42,26 @@ async function sendFile(res, filePath) {
   res.end(body);
 }
 
+function resolveDistPath(pathname) {
+  let decodedPath;
+  try {
+    decodedPath = decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+
+  if (decodedPath.includes("\0")) return null;
+
+  const filePath = resolve(distDir, `.${decodedPath}`);
+  const relativePath = relative(distDir, filePath);
+
+  if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
+    return null;
+  }
+
+  return filePath;
+}
+
 const server = createServer(async (req, res) => {
   try {
     let pathname = (req.url ?? "/").split("?")[0];
@@ -69,9 +89,9 @@ const server = createServer(async (req, res) => {
 
     if (pathname === "/") pathname = "/index.html";
 
-    const filePath = join(distDir, pathname);
+    const filePath = resolveDistPath(pathname);
 
-    if (existsSync(filePath) && statSync(filePath).isFile()) {
+    if (filePath && existsSync(filePath) && statSync(filePath).isFile()) {
       await sendFile(res, filePath);
       return;
     }

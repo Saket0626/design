@@ -1,11 +1,12 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
-import { join, extname } from "node:path";
+import { extname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const distDir = join(__dirname, "dist");
+const distRoot = resolve(distDir);
 const indexHtml = join(distDir, "index.html");
 
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
@@ -42,9 +43,36 @@ async function sendFile(res, filePath) {
   res.end(body);
 }
 
+function getRequestPathname(requestUrl) {
+  try {
+    return decodeURIComponent(new URL(requestUrl ?? "/", "http://localhost").pathname);
+  } catch {
+    return null;
+  }
+}
+
+function getSafeStaticFilePath(pathname) {
+  const requestedPath = pathname === "/" ? "/index.html" : pathname;
+  if (requestedPath.includes("\0")) return null;
+
+  const filePath = resolve(distRoot, `.${requestedPath}`);
+  const relativePath = relative(distRoot, filePath);
+
+  if (relativePath === "" || relativePath.startsWith("..") || isAbsolute(relativePath)) {
+    return null;
+  }
+
+  return filePath;
+}
+
 const server = createServer(async (req, res) => {
   try {
-    let pathname = (req.url ?? "/").split("?")[0];
+    const pathname = getRequestPathname(req.url);
+    if (!pathname) {
+      res.writeHead(400, { "Content-Type": "text/plain" });
+      res.end("Bad Request");
+      return;
+    }
 
     if (pathname === "/health") {
       res.writeHead(200, { "Content-Type": "text/plain" });
@@ -67,11 +95,9 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (pathname === "/") pathname = "/index.html";
+    const filePath = getSafeStaticFilePath(pathname);
 
-    const filePath = join(distDir, pathname);
-
-    if (existsSync(filePath) && statSync(filePath).isFile()) {
+    if (filePath && existsSync(filePath) && statSync(filePath).isFile()) {
       await sendFile(res, filePath);
       return;
     }

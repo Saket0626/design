@@ -1,10 +1,27 @@
 import { useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { ALL_SPECIALTIES, type Specialty } from "../types";
+import { ALL_SPECIALTIES, type Specialty, type User } from "../types";
 
 export function ProfileEditPage() {
-  const { user, updateProfile } = useAuth();
+  const { user, loading, updateProfile } = useAuth();
+
+  if (loading) {
+    return <div className="px-4 py-16 text-center text-charcoal/60">Loading profile...</div>;
+  }
+
+  if (!user) return <Navigate to="/login" replace />;
+
+  return <ProfileEditForm user={user} updateProfile={updateProfile} />;
+}
+
+function ProfileEditForm({
+  user,
+  updateProfile,
+}: {
+  user: User;
+  updateProfile: ReturnType<typeof useAuth>["updateProfile"];
+}) {
   const [bio, setBio] = useState(user?.bio ?? "");
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
   const [username, setUsername] = useState(user?.username ?? "");
@@ -13,8 +30,6 @@ export function ProfileEditPage() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-
-  if (!user) return <Navigate to="/login" replace />;
 
   const toggleSpecialty = (s: Specialty) => {
     setSpecialties((prev) =>

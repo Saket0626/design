@@ -17,7 +17,7 @@ export function FeedCard({ post }: FeedCardProps) {
     n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 
   const handleLike = () => {
-    if (user) toggleLike(post.id, user.id);
+    if (user) toggleLike(post.id);
   };
 
   return (

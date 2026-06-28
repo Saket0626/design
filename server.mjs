@@ -40,6 +40,11 @@ async function sendFile(res, filePath) {
 export function getStaticFilePath(rawUrl = "/") {
   let pathname;
   try {
+    const rawPath = rawUrl.split(/[?#]/, 1)[0];
+    const decodedRawPath = decodeURIComponent(rawPath);
+    if (decodedRawPath.split(/[\\/]+/).includes("..")) {
+      return null;
+    }
     pathname = decodeURIComponent(new URL(rawUrl, "http://roomcraft.local").pathname);
   } catch {
     return null;

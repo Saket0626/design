@@ -261,13 +261,12 @@ export async function insertPost(
   return mapPost(data as PostRow);
 }
 
-export async function togglePostLike(postId: string): Promise<FeedPost> {
-  const { data, error } = await requireSupabase()
-    .rpc("toggle_post_like", { target_post_id: postId })
-    .single();
+export async function togglePostLike(postId: string): Promise<void> {
+  const { error } = await requireSupabase().rpc("toggle_post_like", {
+    target_post_id: postId,
+  });
 
   if (error) throw error;
-  return mapPost(data as PostRow);
 }
 
 export async function fetchWorkshopsForUser(userId: string): Promise<WorkshopRoom[]> {

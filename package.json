@@ -9,7 +9,8 @@
     "start": "node server.mjs",
     "deploy": "bash scripts/deploy.sh",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=20"

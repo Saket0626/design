@@ -1,22 +1,25 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
-import { join, extname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { extname, isAbsolute, relative, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
-const distDir = join(__dirname, "dist");
-const indexHtml = join(distDir, "index.html");
+const distDir = resolve(__dirname, "dist");
+const indexHtml = resolve(distDir, "index.html");
 
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
 const host = process.env.HOST ?? "0.0.0.0";
+const isDirectRun = process.argv[1]
+  ? import.meta.url === pathToFileURL(resolve(process.argv[1])).href
+  : false;
 
-if (!Number.isFinite(port) || port < 1 || port > 65535) {
+if (isDirectRun && (!Number.isFinite(port) || port < 1 || port > 65535)) {
   console.error("Invalid PORT:", process.env.PORT);
   process.exit(1);
 }
 
-if (!existsSync(indexHtml)) {
+if (isDirectRun && !existsSync(indexHtml)) {
   console.error("Missing dist/index.html — run `npm run build` before `npm start`");
   process.exit(1);
 }
@@ -42,7 +45,40 @@ async function sendFile(res, filePath) {
   res.end(body);
 }
 
-const server = createServer(async (req, res) => {
+function hasParentDirectorySegment(pathname) {
+  return pathname.split("/").some((segment) => segment === "..");
+}
+
+export function getStaticFilePath(pathname) {
+  let requestPath = pathname || "/";
+  if (requestPath === "/") requestPath = "/index.html";
+
+  let decodedPath;
+  try {
+    decodedPath = decodeURIComponent(requestPath);
+  } catch {
+    return null;
+  }
+
+  if (
+    decodedPath.includes("\0") ||
+    hasParentDirectorySegment(requestPath) ||
+    hasParentDirectorySegment(decodedPath)
+  ) {
+    return null;
+  }
+
+  const filePath = resolve(distDir, decodedPath.replace(/^\/+/, ""));
+  const pathFromDist = relative(distDir, filePath);
+
+  if (pathFromDist.startsWith("..") || isAbsolute(pathFromDist)) {
+    return null;
+  }
+
+  return filePath;
+}
+
+export const server = createServer(async (req, res) => {
   try {
     let pathname = (req.url ?? "/").split("?")[0];
 
@@ -67,9 +103,12 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (pathname === "/") pathname = "/index.html";
-
-    const filePath = join(distDir, pathname);
+    const filePath = getStaticFilePath(pathname);
+    if (!filePath) {
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("Not Found");
+      return;
+    }
 
     if (existsSync(filePath) && statSync(filePath).isFile()) {
       await sendFile(res, filePath);
@@ -89,18 +128,20 @@ server.on("error", (err) => {
   process.exit(1);
 });
 
-server.listen(port, host, () => {
-  const hasUrl = Boolean(process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL);
-  const hasKey = Boolean(
-    process.env.VITE_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY
-  );
-  console.log(`RoomCraft listening on http://${host}:${port}`);
-  console.log(`Health check: http://${host}:${port}/health`);
-  if (!hasUrl || !hasKey) {
-    console.warn(
-      "WARNING: Supabase env vars missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Railway Variables."
+if (isDirectRun) {
+  server.listen(port, host, () => {
+    const hasUrl = Boolean(process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL);
+    const hasKey = Boolean(
+      process.env.VITE_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY
     );
-  } else {
-    console.log("Supabase runtime config: OK");
-  }
-});
+    console.log(`RoomCraft listening on http://${host}:${port}`);
+    console.log(`Health check: http://${host}:${port}/health`);
+    if (!hasUrl || !hasKey) {
+      console.warn(
+        "WARNING: Supabase env vars missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Railway Variables."
+      );
+    } else {
+      console.log("Supabase runtime config: OK");
+    }
+  });
+}

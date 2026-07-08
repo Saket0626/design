@@ -261,17 +261,13 @@ export async function insertPost(
   return mapPost(data as PostRow);
 }
 
-export async function updatePostLikes(
-  postId: string,
-  likes: number,
-  likedBy: string[]
-): Promise<void> {
-  const { error } = await requireSupabase()
-    .from("feed_posts")
-    .update({ likes, liked_by: likedBy })
-    .eq("id", postId);
+export async function togglePostLike(postId: string): Promise<FeedPost> {
+  const { data, error } = await requireSupabase()
+    .rpc("toggle_post_like", { target_post_id: postId })
+    .single();
 
   if (error) throw error;
+  return mapPost(data as PostRow);
 }
 
 export async function fetchWorkshopsForUser(userId: string): Promise<WorkshopRoom[]> {

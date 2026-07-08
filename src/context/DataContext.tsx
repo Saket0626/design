@@ -14,8 +14,8 @@ import {
   insertCategory,
   insertPost,
   insertProject,
+  togglePostLike,
   updateCategoryRow,
-  updatePostLikes,
   upsertWorkshop,
 } from "../lib/database";
 import { isSupabaseConfigured } from "../lib/supabase";
@@ -153,15 +153,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const toggleLike = useCallback(
     async (postId: string, userId: string) => {
       const post = posts.find((p) => p.id === postId);
-      if (!post) return;
+      if (!post || !userId) return;
 
-      const liked = post.likedBy.includes(userId);
-      const likedBy = liked
-        ? post.likedBy.filter((id) => id !== userId)
-        : [...post.likedBy, userId];
-      const likes = liked ? post.likes - 1 : post.likes + 1;
-
-      await updatePostLikes(postId, likes, likedBy);
+      const updatedPost = await togglePostLike(postId);
+      setPosts((current) =>
+        current.map((currentPost) =>
+          currentPost.id === updatedPost.id ? updatedPost : currentPost
+        )
+      );
       await refresh();
     },
     [posts, refresh]

@@ -26,9 +26,9 @@ const MIME = {
 };
 
 function getRequestPath(requestUrl) {
+  const rawPath = String(requestUrl ?? "/").split("?")[0].split("#")[0] || "/";
   try {
-    const { pathname } = new URL(requestUrl ?? "/", "http://localhost");
-    return decodeURIComponent(pathname);
+    return decodeURIComponent(rawPath);
   } catch {
     return null;
   }

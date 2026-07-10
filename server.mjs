@@ -1,25 +1,15 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
-import { join, extname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { extname, isAbsolute, relative, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
-const distDir = join(__dirname, "dist");
-const indexHtml = join(distDir, "index.html");
+const distDir = resolve(__dirname, "dist");
+const indexHtml = resolve(distDir, "index.html");
 
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
 const host = process.env.HOST ?? "0.0.0.0";
-
-if (!Number.isFinite(port) || port < 1 || port > 65535) {
-  console.error("Invalid PORT:", process.env.PORT);
-  process.exit(1);
-}
-
-if (!existsSync(indexHtml)) {
-  console.error("Missing dist/index.html — run `npm run build` before `npm start`");
-  process.exit(1);
-}
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -35,6 +25,31 @@ const MIME = {
   ".woff2": "font/woff2",
 };
 
+function getRequestPath(requestUrl) {
+  const rawPath = String(requestUrl ?? "/").split("?")[0].split("#")[0] || "/";
+  try {
+    return decodeURIComponent(rawPath);
+  } catch {
+    return null;
+  }
+}
+
+export function getStaticFilePath(requestUrl) {
+  const pathname = getRequestPath(requestUrl);
+  if (!pathname || pathname.includes("\0")) return null;
+  if (pathname === "/") return indexHtml;
+  if (pathname.split("/").includes("..")) return null;
+
+  const filePath = resolve(distDir, `.${pathname}`);
+  const pathWithinDist = relative(distDir, filePath);
+
+  if (pathWithinDist.startsWith("..") || isAbsolute(pathWithinDist)) {
+    return null;
+  }
+
+  return filePath;
+}
+
 async function sendFile(res, filePath) {
   const body = await readFile(filePath);
   const ext = extname(filePath);
@@ -42,65 +57,93 @@ async function sendFile(res, filePath) {
   res.end(body);
 }
 
-const server = createServer(async (req, res) => {
-  try {
-    let pathname = (req.url ?? "/").split("?")[0];
+export function createRoomCraftServer() {
+  return createServer(async (req, res) => {
+    try {
+      const pathname = getRequestPath(req.url);
+      if (!pathname) {
+        res.writeHead(400, { "Content-Type": "text/plain" });
+        res.end("Bad Request");
+        return;
+      }
 
-    if (pathname === "/health") {
-      res.writeHead(200, { "Content-Type": "text/plain" });
-      res.end("ok");
-      return;
+      if (pathname === "/health") {
+        res.writeHead(200, { "Content-Type": "text/plain" });
+        res.end("ok");
+        return;
+      }
+
+      if (pathname === "/runtime-config.js") {
+        const config = {
+          VITE_SUPABASE_URL:
+            process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "",
+          VITE_SUPABASE_ANON_KEY:
+            process.env.VITE_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY ?? "",
+        };
+        res.writeHead(200, {
+          "Content-Type": "application/javascript; charset=utf-8",
+          "Cache-Control": "no-store",
+        });
+        res.end(`window.__RUNTIME_CONFIG__=${JSON.stringify(config)};`);
+        return;
+      }
+
+      const filePath = getStaticFilePath(req.url);
+      if (!filePath) {
+        res.writeHead(404, { "Content-Type": "text/plain" });
+        res.end("Not Found");
+        return;
+      }
+
+      if (existsSync(filePath) && statSync(filePath).isFile()) {
+        await sendFile(res, filePath);
+        return;
+      }
+
+      await sendFile(res, indexHtml);
+    } catch (err) {
+      console.error("Request error:", err);
+      res.writeHead(500, { "Content-Type": "text/plain" });
+      res.end("Internal Server Error");
     }
+  });
+}
 
-    if (pathname === "/runtime-config.js") {
-      const config = {
-        VITE_SUPABASE_URL:
-          process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "",
-        VITE_SUPABASE_ANON_KEY:
-          process.env.VITE_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY ?? "",
-      };
-      res.writeHead(200, {
-        "Content-Type": "application/javascript; charset=utf-8",
-        "Cache-Control": "no-store",
-      });
-      res.end(`window.__RUNTIME_CONFIG__=${JSON.stringify(config)};`);
-      return;
-    }
-
-    if (pathname === "/") pathname = "/index.html";
-
-    const filePath = join(distDir, pathname);
-
-    if (existsSync(filePath) && statSync(filePath).isFile()) {
-      await sendFile(res, filePath);
-      return;
-    }
-
-    await sendFile(res, indexHtml);
-  } catch (err) {
-    console.error("Request error:", err);
-    res.writeHead(500, { "Content-Type": "text/plain" });
-    res.end("Internal Server Error");
+function startServer() {
+  if (!Number.isFinite(port) || port < 1 || port > 65535) {
+    console.error("Invalid PORT:", process.env.PORT);
+    process.exit(1);
   }
-});
 
-server.on("error", (err) => {
-  console.error("Server failed to start:", err);
-  process.exit(1);
-});
+  if (!existsSync(indexHtml)) {
+    console.error("Missing dist/index.html — run `npm run build` before `npm start`");
+    process.exit(1);
+  }
 
-server.listen(port, host, () => {
-  const hasUrl = Boolean(process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL);
-  const hasKey = Boolean(
-    process.env.VITE_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY
-  );
-  console.log(`RoomCraft listening on http://${host}:${port}`);
-  console.log(`Health check: http://${host}:${port}/health`);
-  if (!hasUrl || !hasKey) {
-    console.warn(
-      "WARNING: Supabase env vars missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Railway Variables."
+  const server = createRoomCraftServer();
+
+  server.on("error", (err) => {
+    console.error("Server failed to start:", err);
+    process.exit(1);
+  });
+
+  server.listen(port, host, () => {
+    const hasUrl = Boolean(process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL);
+    const hasKey = Boolean(
+      process.env.VITE_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY
     );
-  } else {
-    console.log("Supabase runtime config: OK");
-  }
-});
+    console.log(`RoomCraft listening on http://${host}:${port}`);
+    console.log(`Health check: http://${host}:${port}/health`);
+    if (!hasUrl || !hasKey) {
+      console.warn(
+        "WARNING: Supabase env vars missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Railway Variables."
+      );
+    } else {
+      console.log("Supabase runtime config: OK");
+    }
+  });
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  startServer();
+}

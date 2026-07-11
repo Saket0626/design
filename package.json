@@ -8,6 +8,7 @@
     "build": "vite build",
     "start": "node server.mjs",
     "deploy": "bash scripts/deploy.sh",
+    "test": "node --test",
     "lint": "eslint .",
     "preview": "vite preview"
   },

@@ -3,9 +3,12 @@ import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
 
 export function ProfilePage() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const { getUserCategories, workshops } = useData();
 
+  if (loading) {
+    return <div className="px-4 py-16 text-center text-charcoal/60">Loading your profile...</div>;
+  }
   if (!user) return <Navigate to="/login" replace />;
 
   const categories = getUserCategories(user.id);

@@ -17,7 +17,7 @@ type ProductCategory = Product["category"];
 
 export function WorkshopPage() {
   const { roomId } = useParams<{ roomId?: string }>();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const { workshops, saveWorkshop } = useData();
   const navigate = useNavigate();
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -36,8 +36,6 @@ export function WorkshopPage() {
   const [saved, setSaved] = useState(false);
 
   const roomDbId = existing?.id ?? uid();
-
-  if (!user) return <Navigate to="/login" replace />;
 
   const selected = placed.find((p) => p.id === selectedId);
   const selectedProduct = selected ? getProduct(selected.productId) : undefined;
@@ -97,6 +95,8 @@ export function WorkshopPage() {
   const handlePointerUp = () => setDragging(null);
 
   const handleSave = async () => {
+    if (!user) return;
+
     const room: WorkshopRoom = {
       id: roomDbId,
       userId: user.id,
@@ -122,6 +122,11 @@ export function WorkshopPage() {
     };
     reader.readAsDataURL(file);
   };
+
+  if (loading) {
+    return <div className="px-4 py-16 text-center text-charcoal/60">Loading your workshop...</div>;
+  }
+  if (!user) return <Navigate to="/login" replace />;
 
   return (
     <div className="flex min-h-[calc(100dvh-3.5rem)] flex-col lg:flex-row">

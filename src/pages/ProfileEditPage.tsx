@@ -1,19 +1,31 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { ALL_SPECIALTIES, type Specialty } from "../types";
 
 export function ProfileEditPage() {
-  const { user, updateProfile } = useAuth();
-  const [bio, setBio] = useState(user?.bio ?? "");
-  const [displayName, setDisplayName] = useState(user?.displayName ?? "");
-  const [username, setUsername] = useState(user?.username ?? "");
-  const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl ?? "");
-  const [specialties, setSpecialties] = useState<Specialty[]>(user?.specialties ?? []);
+  const { user, loading, updateProfile } = useAuth();
+  const [bio, setBio] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [username, setUsername] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [specialties, setSpecialties] = useState<Specialty[]>([]);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    if (!user) return;
+    setBio(user.bio);
+    setDisplayName(user.displayName);
+    setUsername(user.username);
+    setAvatarUrl(user.avatarUrl);
+    setSpecialties(user.specialties);
+  }, [user]);
+
+  if (loading) {
+    return <div className="px-4 py-16 text-center text-charcoal/60">Loading your profile...</div>;
+  }
   if (!user) return <Navigate to="/login" replace />;
 
   const toggleSpecialty = (s: Specialty) => {

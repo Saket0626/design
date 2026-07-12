@@ -1,11 +1,12 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
-import { join, extname } from "node:path";
+import { extname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
-const distDir = join(__dirname, "dist");
+const thisFile = fileURLToPath(import.meta.url);
+export const distDir = resolve(__dirname, "dist");
 const indexHtml = join(distDir, "index.html");
 
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
@@ -13,11 +14,6 @@ const host = process.env.HOST ?? "0.0.0.0";
 
 if (!Number.isFinite(port) || port < 1 || port > 65535) {
   console.error("Invalid PORT:", process.env.PORT);
-  process.exit(1);
-}
-
-if (!existsSync(indexHtml)) {
-  console.error("Missing dist/index.html — run `npm run build` before `npm start`");
   process.exit(1);
 }
 
@@ -42,9 +38,36 @@ async function sendFile(res, filePath) {
   res.end(body);
 }
 
+export function getStaticFilePath(rawUrl = "/") {
+  let pathname = rawUrl.split("?")[0].split("#")[0] || "/";
+  if (pathname === "/") pathname = "/index.html";
+
+  let decodedPathname;
+  try {
+    decodedPathname = decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+
+  if (decodedPathname.includes("\0")) return null;
+
+  const segments = decodedPathname.split(/[\\/]+/);
+  if (segments.includes("..")) return null;
+
+  const relativePath = segments.filter(Boolean).join("/");
+  const filePath = resolve(distDir, relativePath || "index.html");
+  const rootRelativePath = relative(distDir, filePath);
+
+  if (rootRelativePath.startsWith("..") || isAbsolute(rootRelativePath)) {
+    return null;
+  }
+
+  return filePath;
+}
+
 const server = createServer(async (req, res) => {
   try {
-    let pathname = (req.url ?? "/").split("?")[0];
+    const pathname = (req.url ?? "/").split("?")[0];
 
     if (pathname === "/health") {
       res.writeHead(200, { "Content-Type": "text/plain" });
@@ -67,9 +90,13 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    if (pathname === "/") pathname = "/index.html";
+    const filePath = getStaticFilePath(req.url ?? "/");
 
-    const filePath = join(distDir, pathname);
+    if (!filePath) {
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("Not Found");
+      return;
+    }
 
     if (existsSync(filePath) && statSync(filePath).isFile()) {
       await sendFile(res, filePath);
@@ -84,23 +111,34 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.on("error", (err) => {
-  console.error("Server failed to start:", err);
-  process.exit(1);
-});
-
-server.listen(port, host, () => {
-  const hasUrl = Boolean(process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL);
-  const hasKey = Boolean(
-    process.env.VITE_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY
-  );
-  console.log(`RoomCraft listening on http://${host}:${port}`);
-  console.log(`Health check: http://${host}:${port}/health`);
-  if (!hasUrl || !hasKey) {
-    console.warn(
-      "WARNING: Supabase env vars missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Railway Variables."
-    );
-  } else {
-    console.log("Supabase runtime config: OK");
+function startServer() {
+  if (!existsSync(indexHtml)) {
+    console.error("Missing dist/index.html — run `npm run build` before `npm start`");
+    process.exit(1);
   }
-});
+
+  server.on("error", (err) => {
+    console.error("Server failed to start:", err);
+    process.exit(1);
+  });
+
+  server.listen(port, host, () => {
+    const hasUrl = Boolean(process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL);
+    const hasKey = Boolean(
+      process.env.VITE_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY
+    );
+    console.log(`RoomCraft listening on http://${host}:${port}`);
+    console.log(`Health check: http://${host}:${port}/health`);
+    if (!hasUrl || !hasKey) {
+      console.warn(
+        "WARNING: Supabase env vars missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Railway Variables."
+      );
+    } else {
+      console.log("Supabase runtime config: OK");
+    }
+  });
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === thisFile) {
+  startServer();
+}

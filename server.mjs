@@ -1,11 +1,13 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { existsSync, statSync } from "node:fs";
-import { join, extname } from "node:path";
+import { extname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
-const distDir = join(__dirname, "dist");
+const serverEntry = fileURLToPath(import.meta.url);
+const isMain = process.argv[1] === serverEntry;
+const distDir = resolve(__dirname, "dist");
 const indexHtml = join(distDir, "index.html");
 
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
@@ -16,7 +18,7 @@ if (!Number.isFinite(port) || port < 1 || port > 65535) {
   process.exit(1);
 }
 
-if (!existsSync(indexHtml)) {
+if (isMain && !existsSync(indexHtml)) {
   console.error("Missing dist/index.html — run `npm run build` before `npm start`");
   process.exit(1);
 }
@@ -42,7 +44,37 @@ async function sendFile(res, filePath) {
   res.end(body);
 }
 
-const server = createServer(async (req, res) => {
+function requestPathname(rawUrl = "/") {
+  return (rawUrl || "/").split("?")[0] || "/";
+}
+
+function hasUnsafePathSegment(pathname) {
+  return pathname.includes("\0") || pathname.split(/[\\/]+/).includes("..");
+}
+
+export function getStaticFilePath(rawUrl = "/") {
+  const rawPathname = requestPathname(rawUrl);
+  const rawStaticPath = rawPathname === "/" ? "/index.html" : rawPathname;
+
+  if (hasUnsafePathSegment(rawStaticPath)) return null;
+
+  let decodedPath;
+  try {
+    decodedPath = decodeURIComponent(rawStaticPath);
+  } catch {
+    return null;
+  }
+
+  if (hasUnsafePathSegment(decodedPath)) return null;
+
+  const filePath = join(distDir, decodedPath);
+  const relativePath = relative(distDir, filePath);
+  if (relativePath.startsWith("..") || isAbsolute(relativePath)) return null;
+
+  return filePath;
+}
+
+export const server = createServer(async (req, res) => {
   try {
     let pathname = (req.url ?? "/").split("?")[0];
 
@@ -69,7 +101,13 @@ const server = createServer(async (req, res) => {
 
     if (pathname === "/") pathname = "/index.html";
 
-    const filePath = join(distDir, pathname);
+    const filePath = getStaticFilePath(pathname);
+
+    if (!filePath) {
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("Not Found");
+      return;
+    }
 
     if (existsSync(filePath) && statSync(filePath).isFile()) {
       await sendFile(res, filePath);
@@ -84,23 +122,25 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.on("error", (err) => {
-  console.error("Server failed to start:", err);
-  process.exit(1);
-});
+if (isMain) {
+  server.on("error", (err) => {
+    console.error("Server failed to start:", err);
+    process.exit(1);
+  });
 
-server.listen(port, host, () => {
-  const hasUrl = Boolean(process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL);
-  const hasKey = Boolean(
-    process.env.VITE_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY
-  );
-  console.log(`RoomCraft listening on http://${host}:${port}`);
-  console.log(`Health check: http://${host}:${port}/health`);
-  if (!hasUrl || !hasKey) {
-    console.warn(
-      "WARNING: Supabase env vars missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Railway Variables."
+  server.listen(port, host, () => {
+    const hasUrl = Boolean(process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL);
+    const hasKey = Boolean(
+      process.env.VITE_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY
     );
-  } else {
-    console.log("Supabase runtime config: OK");
-  }
-});
+    console.log(`RoomCraft listening on http://${host}:${port}`);
+    console.log(`Health check: http://${host}:${port}/health`);
+    if (!hasUrl || !hasKey) {
+      console.warn(
+        "WARNING: Supabase env vars missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Railway Variables."
+      );
+    } else {
+      console.log("Supabase runtime config: OK");
+    }
+  });
+}

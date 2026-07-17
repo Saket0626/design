@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
+import { categoryPath, resolveCategory } from "../lib/categoryRoutes";
 
 const ROOM_PRESETS = [
   "https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=800&h=600&fit=crop",
@@ -26,7 +27,7 @@ export function NewCategoryPage() {
     setBusy(true);
     try {
       const cat = await addCategory({ name, description, coverImage });
-      navigate(`/category/${cat.slug}`);
+      navigate(categoryPath(cat));
     } finally {
       setBusy(false);
     }
@@ -98,7 +99,10 @@ export function NewCategoryPage() {
 }
 
 export function CategoryPage() {
-  const { slug } = useParams<{ slug: string }>();
+  const { categoryId, legacySlug } = useParams<{
+    categoryId?: string;
+    legacySlug?: string;
+  }>();
   const { user } = useAuth();
   const { categories, getCategoryProjects, addProject, addPost, getProfile } = useData();
   const [showAdd, setShowAdd] = useState(false);
@@ -109,7 +113,7 @@ export function CategoryPage() {
     image: ROOM_PRESETS[0],
   });
 
-  const category = categories.find((c) => c.slug === slug);
+  const category = resolveCategory(categories, categoryId, legacySlug);
   if (!category) {
     return (
       <div className="px-4 py-16 text-center">

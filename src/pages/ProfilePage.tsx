@@ -1,6 +1,7 @@
 import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
+import { categoryPath } from "../lib/categoryRoutes";
 
 export function ProfilePage() {
   const { user } = useAuth();
@@ -74,7 +75,7 @@ export function ProfilePage() {
             {categories.map((cat) => (
               <Link
                 key={cat.id}
-                to={`/category/${cat.slug}`}
+                to={categoryPath(cat)}
                 className="group overflow-hidden rounded-2xl border border-sand bg-white transition hover:shadow-lg"
               >
                 <div className="aspect-[4/3] overflow-hidden">

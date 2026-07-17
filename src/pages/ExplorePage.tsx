@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useData } from "../context/DataContext";
+import { categoryPath } from "../lib/categoryRoutes";
 
 export function ExplorePage() {
   const { profiles, categories, loading } = useData();
@@ -58,7 +59,7 @@ export function ExplorePage() {
               return (
                 <Link
                   key={cat.id}
-                  to={`/category/${cat.slug}`}
+                  to={categoryPath(cat)}
                   className="overflow-hidden rounded-2xl border border-sand"
                 >
                   <img src={cat.coverImage} alt="" className="aspect-[4/3] w-full object-cover" />

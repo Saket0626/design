@@ -23,7 +23,8 @@ function AppRoutes() {
         <Route path="profile" element={<ProfilePage />} />
         <Route path="profile/edit" element={<ProfileEditPage />} />
         <Route path="profile/categories/new" element={<NewCategoryPage />} />
-        <Route path="category/:slug" element={<CategoryPage />} />
+        <Route path="category/:categoryId/:slug" element={<CategoryPage />} />
+        <Route path="category/:legacySlug" element={<CategoryPage />} />
         <Route path="designer/:username" element={<DesignerPage />} />
         <Route path="auth/callback" element={<AuthCallbackPage />} />
         <Route path="login" element={<LoginPage />} />

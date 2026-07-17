@@ -4,6 +4,7 @@ import { fetchProfileByUsername } from "../lib/database";
 import { isSupabaseConfigured } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
+import { categoryPath } from "../lib/categoryRoutes";
 import type { User } from "../types";
 
 export function DesignerPage() {
@@ -94,7 +95,7 @@ export function DesignerPage() {
           {categories.map((cat) => (
             <Link
               key={cat.id}
-              to={`/category/${cat.slug}`}
+              to={categoryPath(cat)}
               className="flex gap-4 overflow-hidden rounded-2xl border border-sand bg-white p-3 transition hover:border-sage"
             >
               <img

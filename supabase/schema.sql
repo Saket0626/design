@@ -143,8 +143,26 @@ create policy "categories_delete_own" on public.style_categories for delete usin
 
 -- Projects
 create policy "projects_select_all" on public.portfolio_projects for select using (true);
-create policy "projects_insert_own" on public.portfolio_projects for insert with check (auth.uid() = user_id);
-create policy "projects_update_own" on public.portfolio_projects for update using (auth.uid() = user_id);
+create policy "projects_insert_own" on public.portfolio_projects for insert with check (
+  auth.uid() = user_id
+  and exists (
+    select 1
+    from public.style_categories
+    where id = category_id
+      and user_id = auth.uid()
+  )
+);
+create policy "projects_update_own" on public.portfolio_projects for update
+  using (auth.uid() = user_id)
+  with check (
+    auth.uid() = user_id
+    and exists (
+      select 1
+      from public.style_categories
+      where id = category_id
+        and user_id = auth.uid()
+    )
+  );
 create policy "projects_delete_own" on public.portfolio_projects for delete using (auth.uid() = user_id);
 
 -- Feed posts
